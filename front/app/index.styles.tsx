@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 export const homeStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f1e8', // Fondo crema de la guía
+    backgroundColor: '#f5f1e8', 
   },
   mainContent: {
     paddingHorizontal: 25,
@@ -15,13 +15,13 @@ export const homeStyles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '900',
-    color: '#5a1e2a', // Borgoña para títulos
+    color: '#5a1e2a', 
     textAlign: 'center',
     letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
-    color: '#c6a75e', // Dorado para detalles
+    color: '#c6a75e', 
     marginTop: 10,
     letterSpacing: 2,
     textTransform: 'uppercase',

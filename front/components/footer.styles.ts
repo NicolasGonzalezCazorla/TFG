@@ -54,7 +54,7 @@ export const footerStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#c6a75e', // Dorado para resaltar que es interactivo
+    borderColor: '#c6a75e', 
   },
   mapText: {
     color: '#5a1e2a',
