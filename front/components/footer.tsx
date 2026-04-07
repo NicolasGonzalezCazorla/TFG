@@ -1,6 +1,5 @@
 import { Text, View, TouchableOpacity, Linking } from 'react-native';
 import { footerStyles } from './footer.styles';
-
 export default function Footer() {
   const mapUrl = "https://www.google.com/maps/place/El+Cuervo,+Sevilla/@36.853099,-6.0394187,3a,75y,157.44h,83.72t/data=!3m7!1e1!3m5!1sR8eaBMauAa14a7NWiUcsGA!2e0!6shttps:%2F%2Fstreetviewpixels-pa.googleapis.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D6.2836978132024655%26panoid%3DR8eaBMauAa14a7NWiUcsGA%26yaw%3D157.43949612942183!7i16384!8i8192!4m6!3m5!1s0xd0d94681945b543:0x40463fd8ca14cb0!8m2!3d36.8527976!4d-6.0385235!16s%2Fm%2F03cg2ps?entry=ttu&g_ep=EgoyMDI2MDMyNC4wIKXMDSoASAFQAw%3D%3D";
 

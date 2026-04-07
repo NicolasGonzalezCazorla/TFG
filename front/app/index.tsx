@@ -1,3 +1,4 @@
+"use client"
 import { Text, View, ScrollView } from "react-native";
 import NavBar from "@/components/NavBar";
 import Footer from "@/components/footer";

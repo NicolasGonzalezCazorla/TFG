@@ -1,12 +1,15 @@
 "use client"
 import NavBar from "@/components/NavBar";
+import Footer from "@/components/footer";
 
-export default function Servicio() {
+export default function Productos() {
     return (
         <div>
             <NavBar />
-            <h1>PRODUCTOS</h1>
-            <p>Información sobre el producto.</p>
+
+            <h1>Productos</h1>
+            
+            <Footer />
         </div>
     );
 }
