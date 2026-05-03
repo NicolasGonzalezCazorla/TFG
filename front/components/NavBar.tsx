@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -10,11 +10,10 @@ export default function CustomHeader() {
       <View style={styles.headerContainer}>
 
         <View style={styles.leftContainer}>
-          <View style={styles.goldCircle} /> {/* Sustituir por <Image /> con tu logo dorado */}
+          <View style={styles.goldCircle} />
           <Text style={styles.brandName}>Estética Alicia</Text>
         </View>
 
-        {/* Navegación y Perfil */}
         <View style={styles.rightContainer}>
           <View style={styles.navLinks}>
             <TouchableOpacity onPress={() => router.push('/')} style={styles.navItem}>
@@ -30,12 +29,16 @@ export default function CustomHeader() {
             <TouchableOpacity onPress={() => router.push('/contacto')} style={styles.navItem}>
               <Text style={styles.navText}>CONTACTOS</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/reserva')} style={styles.navItem}>
+              <Text style={styles.navText}>RESERVAR</Text>
+            </TouchableOpacity>
           </View>
-          
+
           <TouchableOpacity onPress={() => router.push('/Perfil')}>
-            <View style={styles.avatarPlaceholder} /> {/* Sustituir por <Image /> */}
+            <View style={styles.avatarPlaceholder} />
           </TouchableOpacity>
         </View>
+
       </View>
     </SafeAreaView>
   );
