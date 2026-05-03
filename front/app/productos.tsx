@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   StyleSheet,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import NavBar from '../components/NavBar';
@@ -19,49 +20,70 @@ const CREAM      = '#F5F0E8';
 const BORDER     = '#C4B89A';
 const MUTED      = '#9A8E7A';
 const GOLD       = '#C6A75E';
+const API_URL    = 'http://localhost:3000/api';
 
 const CATEGORIAS = ['Todos', 'Facial', 'Corporal', 'Cabello', 'Suplementos'];
-
-const PRODUCTOS = [
-  { id: '1',  name: 'Serum Vitamina C',     price: '45', category: 'Facial',      description: 'Ilumina y unifica el tono de la piel.' },
-  { id: '2',  name: 'Crema Hidratante',      price: '32', category: 'Facial',      description: 'Hidratación profunda para todo tipo de piel.' },
-  { id: '3',  name: 'Aceite Corporal',       price: '28', category: 'Corporal',    description: 'Nutre y suaviza la piel del cuerpo.' },
-  { id: '4',  name: 'Mascarilla Detox',      price: '22', category: 'Facial',      description: 'Purifica los poros en profundidad.' },
-  { id: '5',  name: 'Champú Reparador',      price: '18', category: 'Cabello',     description: 'Restaura el cabello dañado y seco.' },
-  { id: '6',  name: 'Mascarilla Capilar',    price: '24', category: 'Cabello',     description: 'Nutrición intensiva para el cabello.' },
-  { id: '7',  name: 'Colageno Premium',      price: '55', category: 'Suplementos', description: 'Mejora la elasticidad y firmeza de la piel.' },
-  { id: '8',  name: 'Vitamina C Complex',    price: '38', category: 'Suplementos', description: 'Refuerza el sistema inmune y la piel.' },
-  { id: '9',  name: 'Exfoliante Corporal',   price: '26', category: 'Corporal',    description: 'Elimina celulas muertas y suaviza la piel.' },
-  { id: '10', name: 'Contorno de Ojos',      price: '42', category: 'Facial',      description: 'Reduce ojeras y bolsas visiblemente.' },
-  { id: '11', name: 'Aceite Capilar',        price: '20', category: 'Cabello',     description: 'Brillo y nutricion para el cabello seco.' },
-  { id: '12', name: 'Omega 3 Premium',       price: '35', category: 'Suplementos', description: 'Cuida la piel desde el interior.' },
-];
-
 const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/300/300' };
+
+type Producto = {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  categoria: string;
+  marca: string;
+  stock: number;
+  estado: string;
+  imagen_url: string | null;
+};
 
 export default function Productos() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= BREAKPOINT;
   const router    = useRouter();
 
-  const [search,    setSearch]    = useState('');
-  const [categoria, setCategoria] = useState('Todos');
-  const [orden,     setOrden]     = useState<'asc' | 'desc' | null>(null);
+  const [productos,        setProductos]        = useState<Producto[]>([]);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState('');
+  const [search,           setSearch]           = useState('');
+  const [categoria,        setCategoria]        = useState('Todos');
+  const [orden,            setOrden]            = useState<'asc' | 'desc' | null>(null);
 
-  const productosFiltrados = PRODUCTOS
+  useEffect(() => {
+    cargarProductos();
+  }, []);
+
+  const cargarProductos = async () => {
+    try {
+      setLoading(true);
+      const res  = await fetch(`${API_URL}/productos`);
+      const data = await res.json();
+      if (res.ok) {
+        setProductos(data.productos ?? []);
+      } else {
+        setError(data.error || 'Error cargando productos');
+      }
+    } catch (e) {
+      setError('Error de conexion');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const productosFiltrados = productos
     .filter((p) => {
-      const matchCat    = categoria === 'Todos' || p.category === categoria;
-      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+      const matchCat    = categoria === 'Todos' || p.categoria === categoria;
+      const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     })
     .sort((a, b) => {
-      if (orden === 'asc')  return Number(a.price) - Number(b.price);
-      if (orden === 'desc') return Number(b.price) - Number(a.price);
+      if (orden === 'asc')  return a.precio - b.precio;
+      if (orden === 'desc') return b.precio - a.precio;
       return 0;
     });
 
   const numColumns = isDesktop ? 3 : 2;
-  const rows: typeof PRODUCTOS[] = [];
+  const rows: Producto[][] = [];
   for (let i = 0; i < productosFiltrados.length; i += numColumns) {
     rows.push(productosFiltrados.slice(i, i + numColumns));
   }
@@ -89,7 +111,6 @@ export default function Productos() {
           {/* ── Filtros ── */}
           <View style={[s.filtersCard, isDesktop && s.filtersCardDesktop]}>
 
-            {/* Buscador */}
             <View style={s.searchWrapper}>
               <Text style={s.searchIcon}>{'🔍'}</Text>
               <TextInput
@@ -106,7 +127,6 @@ export default function Productos() {
               )}
             </View>
 
-            {/* Categorías */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -125,7 +145,6 @@ export default function Productos() {
               ))}
             </ScrollView>
 
-            {/* Orden precio */}
             <View style={s.ordenRow}>
               <Text style={s.ordenLabel}>{'Precio:'}</Text>
               <TouchableOpacity
@@ -148,66 +167,87 @@ export default function Productos() {
 
           </View>
 
-          {/* ── Resultado ── */}
-          <Text style={s.resultCount}>
-            {productosFiltrados.length} {'productos encontrados'}
-          </Text>
-
-          {/* ── Grid productos ── */}
-          {rows.length === 0 ? (
-            <View style={s.emptyState}>
-              <Text style={s.emptyText}>{'No se encontraron productos'}</Text>
+          {/* ── Loading / Error ── */}
+          {loading ? (
+            <ActivityIndicator color={BURGUNDY} style={{ marginTop: 40 }} />
+          ) : error ? (
+            <View style={s.errorBox}>
+              <Text style={s.errorText}>{error}</Text>
+              <TouchableOpacity onPress={cargarProductos} style={s.retryBtn}>
+                <Text style={s.retryBtnText}>{'Reintentar'}</Text>
+              </TouchableOpacity>
             </View>
           ) : (
-            rows.map((row, rowIdx) => (
-              <View key={rowIdx} style={s.productRow}>
-                {row.map((product) => (
-                  <TouchableOpacity
-                    key={product.id}
-                    style={s.productCard}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/producto/[id]',
-                        params: {
-                          id: product.id,
-                          name: product.name,
-                          price: product.price,
-                          description: product.description,
-                        },
-                      })
-                    }
-                    activeOpacity={0.85}
-                  >
-                    <Image
-                      source={PRODUCT_IMAGE}
-                      style={s.productImage}
-                      resizeMode="contain"
-                    />
-                    <View style={s.productInfo}>
-                      <View style={s.productNameRow}>
-                        <Text style={s.productName} numberOfLines={1}>
-                          {product.name}
-                        </Text>
-                        <Text style={s.productPrice}>{product.price}{'€'}</Text>
-                      </View>
-                      <Text style={s.productCategory}>{product.category}</Text>
-                      <Text style={s.productDesc} numberOfLines={2}>
-                        {product.description}
-                      </Text>
-                    </View>
-                    <View style={s.detalleBtn}>
-                      <Text style={s.detalleBtnText}>{'DETALLE'}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                {row.length < numColumns &&
-                  Array(numColumns - row.length)
-                    .fill(null)
-                    .map((_, i) => (
-                      <View key={`empty-${i}`} style={[s.productCard, { opacity: 0 }]} />
+            <>
+              <Text style={s.resultCount}>
+                {productosFiltrados.length}{' productos encontrados'}
+              </Text>
+
+              {rows.length === 0 ? (
+                <View style={s.emptyState}>
+                  <Text style={s.emptyText}>{'No se encontraron productos'}</Text>
+                </View>
+              ) : (
+                rows.map((row, rowIdx) => (
+                  <View key={rowIdx} style={s.productRow}>
+                    {row.map((product) => (
+                      <TouchableOpacity
+                        key={product.id}
+                        style={s.productCard}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/producto/[id]',
+                            params: {
+                              id:          product.id,
+                              name:        product.nombre,
+                              price:       String(product.precio),
+                              description: product.descripcion,
+                            },
+                          })
+                        }
+                        activeOpacity={0.85}
+                      >
+                        <Image
+                          source={
+                            product.imagen_url
+                              ? { uri: product.imagen_url }
+                              : PRODUCT_IMAGE
+                          }
+                          style={s.productImage}
+                          resizeMode="contain"
+                        />
+                        <View style={s.productInfo}>
+                          <View style={s.productNameRow}>
+                            <Text style={s.productName} numberOfLines={1}>
+                              {product.nombre}
+                            </Text>
+                            <Text style={s.productPrice}>{product.precio}{'€'}</Text>
+                          </View>
+                          <Text style={s.productCategory}>{product.categoria}</Text>
+                          <Text style={s.productDesc} numberOfLines={2}>
+                            {product.descripcion}
+                          </Text>
+                        </View>
+                        <View style={[
+                          s.detalleBtn,
+                          product.estado === 'sin_stock' && s.detalleBtnSinStock,
+                        ]}>
+                          <Text style={s.detalleBtnText}>
+                            {product.estado === 'sin_stock' ? 'SIN STOCK' : 'DETALLE'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
                     ))}
-              </View>
-            ))
+                    {row.length < numColumns &&
+                      Array(numColumns - row.length)
+                        .fill(null)
+                        .map((_, i) => (
+                          <View key={`empty-${i}`} style={[s.productCard, { opacity: 0 }]} />
+                        ))}
+                  </View>
+                ))
+              )}
+            </>
           )}
 
         </View>
@@ -224,21 +264,10 @@ const s = StyleSheet.create({
   container:        { paddingHorizontal: 16, paddingTop: 20 },
   containerDesktop: { maxWidth: 1100, alignSelf: 'center', paddingHorizontal: 40 },
 
-  // ── Cabecera ──
-  pageHeader: {
-    marginBottom: 20,
-  },
-  pageTitle: {
-    fontWeight: '700',
-    color: '#2C2A22',
-    marginBottom: 4,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: MUTED,
-  },
+  pageHeader:   { marginBottom: 20 },
+  pageTitle:    { fontWeight: '700', color: '#2C2A22', marginBottom: 4 },
+  pageSubtitle: { fontSize: 13, color: MUTED },
 
-  // ── Filtros ──
   filtersCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -271,10 +300,7 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 13, color: '#2C2A22' },
   clearBtn:    { fontSize: 14, color: MUTED, paddingLeft: 6 },
 
-  categoriasRow: {
-    gap: 8,
-    paddingVertical: 2,
-  },
+  categoriasRow: { gap: 8, paddingVertical: 2 },
   catBtn: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -283,19 +309,12 @@ const s = StyleSheet.create({
     borderColor: BORDER,
     backgroundColor: '#FAFAF7',
   },
-  catBtnActive: {
-    backgroundColor: BURGUNDY,
-    borderColor: BURGUNDY,
-  },
+  catBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   catBtnText:       { fontSize: 12, color: '#555555' },
   catBtnTextActive: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
 
-  ordenRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ordenLabel: { fontSize: 12, color: MUTED },
+  ordenRow:           { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ordenLabel:         { fontSize: 12, color: MUTED },
   ordenBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -308,14 +327,13 @@ const s = StyleSheet.create({
   ordenBtnText:       { fontSize: 12, color: '#555555' },
   ordenBtnTextActive: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
 
-  // ── Resultado ──
-  resultCount: {
-    fontSize: 12,
-    color: MUTED,
-    marginBottom: 12,
-  },
+  resultCount: { fontSize: 12, color: MUTED, marginBottom: 12 },
 
-  // ── Grid ──
+  errorBox:     { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  errorText:    { fontSize: 14, color: BURGUNDY },
+  retryBtn:     { borderWidth: 0.5, borderColor: BORDER, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 6 },
+  retryBtnText: { fontSize: 13, color: BURGUNDY },
+
   productRow: {
     flexDirection: 'row',
     gap: 12,
@@ -334,9 +352,7 @@ const s = StyleSheet.create({
     height: 140,
     backgroundColor: '#F9F8F4',
   },
-  productInfo: {
-    padding: 10,
-  },
+  productInfo: { padding: 10 },
   productNameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -353,6 +369,7 @@ const s = StyleSheet.create({
     paddingVertical: 9,
     alignItems: 'center',
   },
+  detalleBtnSinStock: { backgroundColor: MUTED },
   detalleBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
@@ -360,13 +377,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  // ── Empty ──
-  emptyState: {
-    paddingVertical: 60,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: MUTED,
-  },
+  emptyState: { paddingVertical: 60, alignItems: 'center' },
+  emptyText:  { fontSize: 14, color: MUTED },
 });

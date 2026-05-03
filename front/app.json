@@ -48,7 +48,8 @@
       "ignorePatterns": [
         "**/*.styles.ts",
         "**/Detalleproducto.tsx",
-        "**/Detalleexperiencia.tsx"
+        "**/Detalleexperiencia.tsx",
+        "**/context/**"
       ]
     }
   }

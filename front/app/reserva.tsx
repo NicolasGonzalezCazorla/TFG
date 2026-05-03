@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   useWindowDimensions,
   StyleSheet,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
+import { useAuth } from '../context/AuthContext';
 
 const MONTHS    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -22,42 +24,62 @@ const ALL_SLOTS = [
   '12:00','12:30','16:00','16:30','17:00','17:30','18:00','18:30',
 ];
 
-const BOOKED: Record<number, string[]> = {
-  5:  ['09:00','10:30','17:00'],
-  12: ['09:30','11:00','16:00'],
-  19: ['10:00','12:00','18:00'],
-};
-
-const SERVICIOS = [
-  { id: '1', name: 'Facial Glow',         duration: '60 min' },
-  { id: '2', name: 'Masaje Relajante',     duration: '75 min' },
-  { id: '3', name: 'Ritual Imperial',      duration: '90 min' },
-  { id: '4', name: 'Hidratacion Profunda', duration: '45 min' },
-  { id: '5', name: 'Tratamiento Capilar',  duration: '60 min' },
-  { id: '6', name: 'Exfoliacion Corporal', duration: '50 min' },
-];
-
 const BREAKPOINT = 768;
 const BURGUNDY   = '#63202C';
 const CREAM      = '#F5F0E8';
 const BORDER     = '#C4B89A';
 const MUTED      = '#9A8E7A';
+const API_URL    = 'http://localhost:3000/api';
+
+type Servicio = {
+  id: string;
+  nombre: string;
+  duracion: number;
+};
 
 export default function Reserva() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= BREAKPOINT;
   const router    = useRouter();
+  const { usuario, token } = useAuth();
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const [curYear,     setCurYear]     = useState(today.getFullYear());
-  const [curMonth,    setCurMonth]    = useState(today.getMonth());
-  const [selDate,     setSelDate]     = useState<number | null>(null);
-  const [selSlot,     setSelSlot]     = useState<string | null>(null);
-  const [selServicio, setSelServicio] = useState<string | null>(null);
-  const [aclaracion,  setAclaracion]  = useState('');
-  const [confirmed,   setConfirmed]   = useState(false);
-  const [showOverlay, setShowOverlay] = useState(false);
-  const [showPanel,   setShowPanel]   = useState(false);
+  const [curYear,          setCurYear]          = useState(today.getFullYear());
+  const [curMonth,         setCurMonth]         = useState(today.getMonth());
+  const [selDate,          setSelDate]          = useState<number | null>(null);
+  const [selSlot,          setSelSlot]          = useState<string | null>(null);
+  const [selServicio,      setSelServicio]      = useState<Servicio | null>(null);
+  const [aclaracion,       setAclaracion]       = useState('');
+  const [confirmed,        setConfirmed]        = useState(false);
+  const [showOverlay,      setShowOverlay]      = useState(false);
+  const [showPanel,        setShowPanel]        = useState(false);
+  const [servicios,        setServicios]        = useState<Servicio[]>([]);
+  const [loading,          setLoading]          = useState(false);
+  const [error,            setError]            = useState('');
+  const [horariosOcupados, setHorariosOcupados] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    fetch(`${API_URL}/servicios`)
+      .then(res => res.json())
+      .then(data => { if (data.servicios) setServicios(data.servicios); })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    cargarHorariosOcupados();
+  }, [curMonth, curYear]);
+
+  const cargarHorariosOcupados = async () => {
+    try {
+      const res  = await fetch(
+        `${API_URL}/citas/disponibilidad?mes=${curMonth + 1}&anio=${curYear}`
+      );
+      const data = await res.json();
+      if (res.ok) setHorariosOcupados(data.ocupados ?? {});
+    } catch (e) {
+      console.error('Error cargando horarios:', e);
+    }
+  };
 
   const changeMonth = (d: number) => {
     let m = curMonth + d;
@@ -74,7 +96,7 @@ export default function Reserva() {
 
   const calWidth = isDesktop
     ? Math.min(width * 0.55, 720) - 64
-    : width - 48 - 64;
+    : width - 48 - 32;
   const cellSize = Math.floor(calWidth / 7);
 
   const openDay = (d: number) => {
@@ -83,11 +105,13 @@ export default function Reserva() {
     setConfirmed(false);
     setShowOverlay(true);
     setShowPanel(false);
+    setError('');
   };
 
   const selectSlot = (slot: string) => {
     setSelSlot(slot);
     setShowPanel(true);
+    setError('');
   };
 
   const resetAll = () => {
@@ -98,6 +122,46 @@ export default function Reserva() {
     setSelServicio(null);
     setAclaracion('');
     setConfirmed(false);
+    setError('');
+    cargarHorariosOcupados();
+  };
+
+  const handleConfirmar = async () => {
+    if (!selSlot || !selServicio) return;
+    if (!usuario || !token) {
+      router.push('/login');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError('');
+      const fechaStr = `${curYear}-${String(curMonth + 1).padStart(2, '0')}-${String(selDate).padStart(2, '0')}`;
+      const res = await fetch(`${API_URL}/citas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          servicio_id: selServicio.id,
+          fecha:       fechaStr,
+          hora:        selSlot,
+          aclaracion:  aclaracion,
+          estado:      'pendiente',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Error al crear la cita');
+        return;
+      }
+      setConfirmed(true);
+      cargarHorariosOcupados();
+    } catch (e) {
+      setError('Error de conexion. Intentalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const canConfirm = selSlot !== null && selServicio !== null;
@@ -106,49 +170,59 @@ export default function Reserva() {
     const cells: React.ReactNode[] = [];
     for (let i = 0; i < firstDay; i++) {
       cells.push(
-        <View key={`e-${i}`} style={[s.dayCell, { width: cellSize, minHeight: 80 }]} />
+        <View key={`e-${i}`} style={[s.dayCell, { width: cellSize, height: cellSize }]} />
       );
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      const dt         = new Date(curYear, curMonth, d);
-      const isToday    = dt.toDateString() === today.toDateString();
-      const isPast     = dt < today;
-      const isWeekend  = dt.getDay() === 0 || dt.getDay() === 6;
-      const isSelected = selDate === d && showOverlay;
-      const disabled   = isPast || isWeekend;
+      const dt           = new Date(curYear, curMonth, d);
+      const isToday      = dt.toDateString() === today.toDateString();
+      const isPast       = dt < today;
+      const isWeekend    = dt.getDay() === 0 || dt.getDay() === 6;
+      const isSelected   = selDate === d && showOverlay;
+      const disabled     = isPast || isWeekend;
+      const diaOcupado   = horariosOcupados[String(d).padStart(2, '0')] ?? horariosOcupados[String(d)] ?? [];
+      const todoOcupado  = diaOcupado.length >= ALL_SLOTS.length;
+
       cells.push(
         <TouchableOpacity
           key={d}
           style={[
             s.dayCell,
-            { width: cellSize, minHeight: 80 },
-            isToday    && s.dayCellToday,
-            isSelected && s.dayCellSelected,
-            disabled   && s.dayCellDisabled,
+            { width: cellSize, height: cellSize },
+            isToday     && s.dayCellToday,
+            isSelected  && s.dayCellSelected,
+            disabled    && s.dayCellDisabled,
+            todoOcupado && !disabled && s.dayCellFull,
           ]}
-          onPress={() => !disabled && openDay(d)}
-          activeOpacity={disabled ? 1 : 0.7}
+          onPress={() => !disabled && !todoOcupado && openDay(d)}
+          activeOpacity={disabled || todoOcupado ? 1 : 0.7}
         >
           <Text style={[
             s.dayText,
-            { fontSize: isDesktop ? 18 : 14 },
+            { fontSize: isDesktop ? 16 : 13 },
             isToday    && s.dayTextToday,
             isSelected && s.dayTextSelected,
             disabled   && s.dayTextDisabled,
           ]}>
             {d}
           </Text>
-          {!disabled && <View style={[s.dot, isSelected && s.dotSelected]} />}
+          {!disabled && !todoOcupado && (
+            <View style={[s.dot, isSelected && s.dotSelected]} />
+          )}
+          {todoOcupado && !disabled && (
+            <Text style={s.fullText}>{'lleno'}</Text>
+          )}
         </TouchableOpacity>
       );
     }
     return cells;
   };
 
-  // En móvil usamos Modal, en desktop columnas inline
   const renderSlotsContent = () => {
     if (selDate === null) return null;
-    const booked = BOOKED[selDate] || [];
+    const diaKey = String(selDate).padStart(2, '0');
+    const booked = horariosOcupados[diaKey] ?? horariosOcupados[String(selDate)] ?? [];
+
     return (
       <View style={{ flex: 1 }}>
         <View style={s.slotsPanelHeader}>
@@ -174,6 +248,7 @@ export default function Reserva() {
                 ]}
                 onPress={() => !isBooked && selectSlot(slot)}
                 activeOpacity={isBooked ? 1 : 0.7}
+                disabled={isBooked}
               >
                 <Text style={[
                   s.slotText,
@@ -182,7 +257,7 @@ export default function Reserva() {
                 ]}>
                   {slot}
                 </Text>
-                {isBooked  && <Text style={s.slotOcupado}>{'Ocupado'}</Text>}
+                {isBooked  && <Text style={s.slotOcupado}>{'No disponible'}</Text>}
                 {isSelSlot && <Text style={s.slotSelIcon}>{'✓'}</Text>}
               </TouchableOpacity>
             );
@@ -202,7 +277,7 @@ export default function Reserva() {
           <Text style={s.successSub}>
             {selDate}{' de '}{MONTHS_ES[curMonth]}{' · '}{selSlot}{'h'}
           </Text>
-          <Text style={s.successService}>{selServicio}</Text>
+          <Text style={s.successService}>{selServicio?.nombre}</Text>
           <TouchableOpacity style={s.resetBtn} onPress={resetAll}>
             <Text style={s.resetBtnText}>{'Reservar otra cita'}</Text>
           </TouchableOpacity>
@@ -218,19 +293,19 @@ export default function Reserva() {
 
         <Text style={s.confirmLabel}>{'Servicio'}</Text>
         <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 200 }}>
-          {SERVICIOS.map((serv) => (
+          {servicios.map((serv) => (
             <TouchableOpacity
               key={serv.id}
-              style={[s.servicioRow, selServicio === serv.name && s.servicioRowSelected]}
-              onPress={() => setSelServicio(serv.name)}
+              style={[s.servicioRow, selServicio?.id === serv.id && s.servicioRowSelected]}
+              onPress={() => setSelServicio(serv)}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[s.servicioName, selServicio === serv.name && s.servicioNameSelected]}>
-                  {serv.name}
+                <Text style={[s.servicioName, selServicio?.id === serv.id && s.servicioNameSelected]}>
+                  {serv.nombre}
                 </Text>
-                <Text style={s.servicioDuration}>{serv.duration}</Text>
+                <Text style={s.servicioDuration}>{serv.duracion}{' min'}</Text>
               </View>
-              {selServicio === serv.name && (
+              {selServicio?.id === serv.id && (
                 <Text style={s.servicioCheck}>{'✓'}</Text>
               )}
             </TouchableOpacity>
@@ -248,16 +323,52 @@ export default function Reserva() {
           numberOfLines={3}
         />
 
+        {!usuario && (
+          <Text style={{ fontSize: 12, color: MUTED, marginBottom: 8, textAlign: 'center' }}>
+            {'Debes iniciar sesion para reservar'}
+          </Text>
+        )}
+
         <TouchableOpacity
-          style={[s.confirmBtn, !canConfirm && s.confirmBtnDisabled]}
-          onPress={() => canConfirm && setConfirmed(true)}
-          disabled={!canConfirm}
+          style={[s.confirmBtn, (!canConfirm || loading) && s.confirmBtnDisabled]}
+          onPress={handleConfirmar}
+          disabled={!canConfirm || loading}
         >
-          <Text style={s.confirmBtnText}>{'RESERVAR CITA'}</Text>
+          {loading
+            ? <ActivityIndicator color="#FFFFFF" />
+            : <Text style={s.confirmBtnText}>{'RESERVAR CITA'}</Text>
+          }
         </TouchableOpacity>
       </View>
     );
   };
+
+  // ── Calendario compartido ──
+  const renderCalCard = () => (
+    <View style={[s.calCard, isDesktop && s.calCardDesktop]}>
+      <View style={s.calHeader}>
+        <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(-1)}>
+          <Text style={s.navBtnText}>{'‹'}</Text>
+        </TouchableOpacity>
+        <Text style={[s.monthLabel, { fontSize: isDesktop ? 16 : 14 }]}>
+          {MONTHS[curMonth]}{' '}{curYear}
+        </Text>
+        <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(1)}>
+          <Text style={s.navBtnText}>{'›'}</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={[s.weekdaysRow, { paddingHorizontal: isDesktop ? 32 : 8 }]}>
+        {WEEKDAYS.map((wd) => (
+          <Text key={wd} style={[s.weekdayText, { width: cellSize, fontSize: isDesktop ? 12 : 10 }]}>
+            {wd}
+          </Text>
+        ))}
+      </View>
+      <View style={[s.daysGrid, { paddingHorizontal: isDesktop ? 32 : 8 }]}>
+        {renderCalendar()}
+      </View>
+    </View>
+  );
 
   return (
     <View style={s.screen}>
@@ -273,42 +384,22 @@ export default function Reserva() {
             <Text style={s.backRowText}>{'<- Volver'}</Text>
           </TouchableOpacity>
 
-          <Text style={[s.pageTitle, { fontSize: isDesktop ? 28 : 22 }]}>
+          <Text style={[s.pageTitle, { fontSize: isDesktop ? 28 : 20 }]}>
             {'RESERVA DE CITAS'}
           </Text>
           <Text style={s.pageSubtitle}>
             {'Selecciona un dia disponible para ver los horarios'}
           </Text>
 
-          {/* ── Desktop: 3 columnas inline ── */}
           {isDesktop ? (
+            // ── Desktop: 3 columnas ──
             <View style={s.mainLayoutDesktop}>
-              <View style={s.calCard}>
-                <View style={s.calHeader}>
-                  <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(-1)}>
-                    <Text style={s.navBtnText}>{'‹'}</Text>
-                  </TouchableOpacity>
-                  <Text style={s.monthLabel}>{MONTHS[curMonth]}{' '}{curYear}</Text>
-                  <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(1)}>
-                    <Text style={s.navBtnText}>{'›'}</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={s.weekdaysRow}>
-                  {WEEKDAYS.map((wd) => (
-                    <Text key={wd} style={[s.weekdayText, { width: cellSize }]}>{wd}</Text>
-                  ))}
-                </View>
-                <View style={s.daysGrid}>
-                  {renderCalendar()}
-                </View>
-              </View>
-
+              {renderCalCard()}
               {showOverlay && (
                 <View style={s.slotsPanel}>
                   {renderSlotsContent()}
                 </View>
               )}
-
               {showPanel && (
                 <View style={s.confirmPanel}>
                   {renderConfirmContent()}
@@ -318,27 +409,7 @@ export default function Reserva() {
           ) : (
             // ── Móvil: calendario + Modal ──
             <>
-              <View style={s.calCard}>
-                <View style={s.calHeader}>
-                  <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(-1)}>
-                    <Text style={s.navBtnText}>{'‹'}</Text>
-                  </TouchableOpacity>
-                  <Text style={s.monthLabel}>{MONTHS[curMonth]}{' '}{curYear}</Text>
-                  <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(1)}>
-                    <Text style={s.navBtnText}>{'›'}</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={s.weekdaysRow}>
-                  {WEEKDAYS.map((wd) => (
-                    <Text key={wd} style={[s.weekdayText, { width: cellSize }]}>{wd}</Text>
-                  ))}
-                </View>
-                <View style={s.daysGrid}>
-                  {renderCalendar()}
-                </View>
-              </View>
-
-              {/* Modal móvil */}
+              {renderCalCard()}
               <Modal
                 visible={showOverlay}
                 animationType="slide"
@@ -348,17 +419,12 @@ export default function Reserva() {
                 <View style={s.modalBackdrop}>
                   <View style={s.modalSheet}>
                     <View style={s.modalHandle} />
-
-                    {/* Slots */}
-                    {!showPanel && (
+                    {!showPanel ? (
                       <View style={{ flex: 1 }}>
                         {renderSlotsContent()}
                       </View>
-                    )}
-
-                    {/* Panel confirmacion */}
-                    {showPanel && (
-                      <View style={{ flex: 1 }}>
+                    ) : (
+                      <ScrollView showsVerticalScrollIndicator={false}>
                         <TouchableOpacity
                           onPress={() => setShowPanel(false)}
                           style={{ marginBottom: 12 }}
@@ -368,7 +434,7 @@ export default function Reserva() {
                           </Text>
                         </TouchableOpacity>
                         {renderConfirmContent()}
-                      </View>
+                      </ScrollView>
                     )}
                   </View>
                 </View>
@@ -387,85 +453,83 @@ const s = StyleSheet.create({
   screen:           { flex: 1, backgroundColor: CREAM },
   scroll:           { flex: 1 },
   scrollContent:    { flexGrow: 1, paddingBottom: 60 },
-  container:        { paddingHorizontal: 24, paddingTop: 32 },
+  container:        { paddingHorizontal: 16, paddingTop: 20 },
   containerDesktop: { maxWidth: 900, alignSelf: 'center', paddingHorizontal: 60 },
 
   backRow:      { paddingVertical: 12 },
   backRowText:  { color: BURGUNDY, fontSize: 14, fontWeight: '600' },
   pageTitle:    { fontWeight: '700', color: '#2C2A22', marginBottom: 4, letterSpacing: 0.5 },
-  pageSubtitle: { fontSize: 13, color: MUTED, marginBottom: 24 },
+  pageSubtitle: { fontSize: 12, color: MUTED, marginBottom: 20 },
 
-  // ── Desktop layout ──
-  mainLayoutDesktop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 16,
-  },
+  mainLayoutDesktop: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
 
-  // ── Calendario ──
   calCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: BORDER,
     overflow: 'hidden',
-    flex: 1,
     marginBottom: 48,
   },
+  calCardDesktop: { flex: 1 },
+
   calHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 32,
-    paddingVertical: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: BORDER,
     backgroundColor: CREAM,
   },
   navBtn:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 6, borderWidth: 0.5, borderColor: BORDER },
   navBtnText: { color: BURGUNDY, fontSize: 22 },
-  monthLabel: { fontSize: 16, color: '#2C2A22', letterSpacing: 0.5 },
+  monthLabel: { color: '#2C2A22', letterSpacing: 0.5 },
 
   weekdaysRow: {
     flexDirection: 'row',
-    paddingHorizontal: 32,
-    paddingTop: 20,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
   weekdayText: {
     textAlign: 'center',
-    fontSize: 12,
     color: MUTED,
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
+
   daysGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 32,
-    paddingBottom: 32,
-    gap: 4,
+    paddingBottom: 16,
+    gap: 2,
   },
 
-  dayCell:         { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  dayCell:         { alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   dayCellToday:    { borderWidth: 0.5, borderColor: BURGUNDY },
   dayCellSelected: { backgroundColor: BURGUNDY },
   dayCellDisabled: { opacity: 0.3 },
+  dayCellFull:     { backgroundColor: '#F0EBE1' },
+
   dayText:         { color: '#4A4035' },
   dayTextToday:    { color: BURGUNDY, fontWeight: '600' },
   dayTextSelected: { color: '#FFFFFF' },
   dayTextDisabled: { color: MUTED },
-  dot:             { width: 4, height: 4, borderRadius: 2, backgroundColor: BURGUNDY, position: 'absolute', bottom: 8 },
-  dotSelected:     { backgroundColor: '#FFFFFF' },
 
-  // ── Panel slots (desktop) ──
+  fullText: { fontSize: 8, color: MUTED, marginTop: 1 },
+
+  dot:         { width: 3, height: 3, borderRadius: 2, backgroundColor: BURGUNDY, position: 'absolute', bottom: 5 },
+  dotSelected: { backgroundColor: '#FFFFFF' },
+
+  // ── Slots panel (desktop) ──
   slotsPanel: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
-    width: 180,
+    width: 190,
     maxHeight: 560,
   },
   slotsPanelHeader: {
@@ -493,19 +557,19 @@ const s = StyleSheet.create({
   slotRowBooked:    { backgroundColor: '#F0EBE1', borderColor: '#E0D8C8' },
   slotRowSelected:  { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   slotText:         { fontSize: 12, color: '#4A4035' },
-  slotTextBooked:   { color: MUTED, textDecorationLine: 'line-through' },
+  slotTextBooked:   { color: '#C4B89A', textDecorationLine: 'line-through' },
   slotTextSelected: { color: '#FFFFFF' },
-  slotOcupado:      { fontSize: 9, color: MUTED },
+  slotOcupado:      { fontSize: 9, color: '#C4B89A', fontStyle: 'italic' },
   slotSelIcon:      { fontSize: 11, color: '#FFFFFF' },
 
-  // ── Panel confirmacion (desktop) ──
+  // ── Confirm panel (desktop) ──
   confirmPanel: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
-    width: 260,
+    width: 240,
   },
   confirmPanelTitle: { fontSize: 14, fontWeight: '700', color: '#2C2A22', marginBottom: 4 },
   confirmPanelDate:  { fontSize: 11, color: MUTED, marginBottom: 14 },
@@ -556,8 +620,8 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    paddingBottom: 40,
-    maxHeight: '85%',
+    paddingBottom: 48,
+    maxHeight: '88%',
   },
   modalHandle: {
     width: 40,
@@ -565,11 +629,10 @@ const s = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: BORDER,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
 
-  // ── Exito ──
-  successBox:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 30 },
+  successBox:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
   successCheck:   { fontSize: 40, color: BURGUNDY, marginBottom: 12 },
   successTitle:   { fontSize: 18, fontWeight: '700', color: BURGUNDY, marginBottom: 6 },
   successSub:     { fontSize: 14, color: '#4A4035', marginBottom: 4 },

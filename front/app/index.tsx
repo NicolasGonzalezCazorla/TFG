@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import SearchBar from '../components/SearchBar';
 import SectionHeader from '../components/SectionHeader';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
+
+const API_URL = 'http://localhost:3000/api';
 
 type Product = {
   id: string;
@@ -55,13 +57,13 @@ const EXPERIENCES: Experience[] = [
 
 const CATEGORIES = ['CAT 1', 'CAT 2', 'CAT 3', 'CAT 4'];
 
-const PRODUCTS: Product[] = [
-  { id: '1', name: 'Producto 1', price: '25', description: 'Descripción del producto breve. Descripción secundaria.' },
-  { id: '2', name: 'Producto 2', price: '34', description: 'Descripción del producto breve. Descripción secundaria.' },
-  { id: '3', name: 'Producto 3', price: '27', description: 'Descripción del producto breve. Descripción secundaria.' },
-  { id: '4', name: 'Producto 4', price: '29', description: 'Descripción del producto breve. Descripción secundaria.' },
-  { id: '5', name: 'Producto 5', price: '40', description: 'Descripción del producto breve. Descripción secundaria.' },
-  { id: '6', name: 'Producto 6', price: '22', description: 'Descripción del producto breve. Descripción secundaria.' },
+const PRODUCTS_FALLBACK: Product[] = [
+  { id: '1', name: 'Producto 1', price: '25', description: 'Descripcion del producto breve.' },
+  { id: '2', name: 'Producto 2', price: '34', description: 'Descripcion del producto breve.' },
+  { id: '3', name: 'Producto 3', price: '27', description: 'Descripcion del producto breve.' },
+  { id: '4', name: 'Producto 4', price: '29', description: 'Descripcion del producto breve.' },
+  { id: '5', name: 'Producto 5', price: '40', description: 'Descripcion del producto breve.' },
+  { id: '6', name: 'Producto 6', price: '22', description: 'Descripcion del producto breve.' },
 ];
 
 const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/300/300' };
@@ -70,18 +72,39 @@ const BREAKPOINT    = 768;
 
 export default function Home() {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= BREAKPOINT;
-  const router = useRouter();
+  const isDesktop  = width >= BREAKPOINT;
+  const router     = useRouter();
 
-  const [searchQuery, setSearchQuery]       = useState('');
+  const [searchQuery,    setSearchQuery]    = useState('');
   const [activeCategory, setActiveCategory] = useState('CAT 1');
+  const [productos,      setProductos]      = useState<Product[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/productos`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.productos && data.productos.length > 0) {
+          // Muestra solo los primeros 6 en el home
+          const primeros6 = data.productos.slice(0, 6).map((p: any) => ({
+            id:          p.id,
+            name:        p.nombre,
+            price:       String(p.precio),
+            description: p.descripcion,
+          }));
+          setProductos(primeros6);
+        } else {
+          setProductos(PRODUCTS_FALLBACK);
+        }
+      })
+      .catch(() => setProductos(PRODUCTS_FALLBACK));
+  }, []);
 
   const renderHero = () => {
     if (isDesktop) {
       return (
         <View style={s.heroBanner}>
           <View style={s.heroLeft}>
-            <Text style={s.heroEyebrow}>Bienvenidos</Text>
+            <Text style={s.heroEyebrow}>{'Bienvenidos'}</Text>
             <Text style={s.heroTitle}>{'ESTÉTICA\nALICIA'}</Text>
             <Text style={s.heroSubtitle}>
               {'Tratamientos holistos y minerales con Ohlalá products.\nReserva tu cita en segundos y disfruta una experiencia única.'}
@@ -136,10 +159,10 @@ export default function Home() {
                 router.push({
                   pathname: '/experiencia/[id]',
                   params: {
-                    id: exp.id,
-                    title: exp.title,
+                    id:          exp.id,
+                    title:       exp.title,
                     description: exp.description,
-                    image: exp.image.uri,
+                    image:       exp.image.uri,
                   },
                 })
               }
@@ -159,10 +182,10 @@ export default function Home() {
                 router.push({
                   pathname: '/experiencia/[id]',
                   params: {
-                    id: exp.id,
-                    title: exp.title,
+                    id:          exp.id,
+                    title:       exp.title,
                     description: exp.description,
-                    image: exp.image.uri,
+                    image:       exp.image.uri,
                   },
                 })
               }
@@ -176,8 +199,8 @@ export default function Home() {
   const renderProducts = () => {
     const numColumns = isDesktop ? 3 : 2;
     const rows: Product[][] = [];
-    for (let i = 0; i < PRODUCTS.length; i += numColumns) {
-      rows.push(PRODUCTS.slice(i, i + numColumns));
+    for (let i = 0; i < productos.length; i += numColumns) {
+      rows.push(productos.slice(i, i + numColumns));
     }
 
     return (
@@ -229,9 +252,9 @@ export default function Home() {
                     router.push({
                       pathname: '/producto/[id]',
                       params: {
-                        id: product.id,
-                        name: product.name,
-                        price: product.price,
+                        id:          product.id,
+                        name:        product.name,
+                        price:       product.price,
                         description: product.description,
                       },
                     })

@@ -9,23 +9,24 @@ import {
   Modal,
   useWindowDimensions,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import NavBar from '../../components/NavBar';
 import Footer from '../../components/footer';
 import Button from '../../components/Button';
 import { detalleStyles as s } from '../Detalle.styles';
+import { useAuth } from '../../context/AuthContext';
 
-const BREAKPOINT   = 768;
-const BURGUNDY     = '#63202C';
-const CREAM        = '#F5F0E8';
-const BORDER       = '#C4B89A';
-const MUTED        = '#9A8E7A';
+const BREAKPOINT    = 768;
+const BURGUNDY      = '#63202C';
+const CREAM         = '#F5F0E8';
+const BORDER        = '#C4B89A';
+const MUTED         = '#9A8E7A';
 const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/500/500' };
+const API_URL       = 'http://localhost:3000/api';
 
-const DIAS_RECOGIDA = [
-  'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes',
-];
+const DIAS_RECOGIDA = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'];
 const HORARIOS_RECOGIDA = [
   '09:30', '10:00', '10:30', '11:00', '11:30',
   '12:00', '16:00', '16:30', '17:00', '17:30', '18:00',
@@ -34,10 +35,12 @@ const HORARIOS_RECOGIDA = [
 export default function DetalleProducto() {
   const router = useRouter();
   const raw    = useLocalSearchParams();
+  const { usuario, token } = useAuth();
 
   const str = (v: string | string[] | undefined): string =>
     Array.isArray(v) ? v[0] : v ?? '';
 
+  const productId   = str(raw.id);
   const name        = str(raw.name);
   const price       = str(raw.price);
   const description = str(raw.description);
@@ -45,11 +48,13 @@ export default function DetalleProducto() {
   const { width } = useWindowDimensions();
   const isDesktop  = width >= BREAKPOINT;
 
-  const [showModal,   setShowModal]   = useState(false);
-  const [selDia,      setSelDia]      = useState<string | null>(null);
-  const [selHorario,  setSelHorario]  = useState<string | null>(null);
-  const [nota,        setNota]        = useState('');
-  const [confirmed,   setConfirmed]   = useState(false);
+  const [showModal,  setShowModal]  = useState(false);
+  const [selDia,     setSelDia]     = useState<string | null>(null);
+  const [selHorario, setSelHorario] = useState<string | null>(null);
+  const [nota,       setNota]       = useState('');
+  const [confirmed,  setConfirmed]  = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState('');
 
   const canConfirm = selDia !== null && selHorario !== null;
 
@@ -59,6 +64,52 @@ export default function DetalleProducto() {
     setSelHorario(null);
     setNota('');
     setConfirmed(false);
+    setError('');
+  };
+
+  const handleReservar = async () => {
+    if (!canConfirm) return;
+
+    // Si no hay sesión, redirige al login
+    if (!usuario || !token) {
+      setShowModal(false);
+      router.push('/login');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const res = await fetch(`${API_URL}/reservas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          producto_id:   productId,
+          dia_recogida:  selDia,
+          hora_recogida: selHorario,
+          nota:          nota,
+          estado:        'pendiente',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Error al realizar la reserva');
+        return;
+      }
+
+      setConfirmed(true);
+
+    } catch (e: any) {
+      setError('Error de conexion. Intentalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -118,6 +169,13 @@ export default function DetalleProducto() {
                   <Text style={s.priceText}>{price}{'€'}</Text>
                 </View>
               </View>
+
+              {/* Aviso si no hay sesión */}
+              {!usuario && (
+                <Text style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>
+                  {'Debes iniciar sesion para reservar'}
+                </Text>
+              )}
             </View>
 
           </View>
@@ -137,7 +195,6 @@ export default function DetalleProducto() {
             <View style={m.handle} />
 
             {confirmed ? (
-              // ── Confirmacion ──
               <View style={m.successBox}>
                 <Text style={m.successIcon}>{'✓'}</Text>
                 <Text style={m.successTitle}>{'Reserva confirmada'}</Text>
@@ -146,7 +203,7 @@ export default function DetalleProducto() {
                   {'Recogida el '}{selDia}{' a las '}{selHorario}{'h'}
                 </Text>
                 <Text style={m.successNote}>
-                  {'Te esperamos en tienda. Traera este mensaje como justificante.'}
+                  {'Te esperamos en tienda. Trae este mensaje como justificante.'}
                 </Text>
                 <TouchableOpacity style={m.closeBtn} onPress={resetModal}>
                   <Text style={m.closeBtnText}>{'Cerrar'}</Text>
@@ -155,7 +212,6 @@ export default function DetalleProducto() {
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
 
-                {/* Cabecera */}
                 <View style={m.header}>
                   <View>
                     <Text style={m.title}>{'Reservar para recoger'}</Text>
@@ -170,7 +226,6 @@ export default function DetalleProducto() {
                   {'Reserva el producto y recogelo en tienda en el horario que prefieras.'}
                 </Text>
 
-                {/* Dia de recogida */}
                 <Text style={m.label}>{'Dia de recogida'}</Text>
                 <ScrollView
                   horizontal
@@ -190,7 +245,6 @@ export default function DetalleProducto() {
                   ))}
                 </ScrollView>
 
-                {/* Horario */}
                 <Text style={[m.label, { marginTop: 16 }]}>{'Horario de recogida'}</Text>
                 <View style={m.horariosGrid}>
                   {HORARIOS_RECOGIDA.map((h) => (
@@ -206,7 +260,6 @@ export default function DetalleProducto() {
                   ))}
                 </View>
 
-                {/* Nota */}
                 <Text style={[m.label, { marginTop: 16 }]}>{'Nota (opcional)'}</Text>
                 <TextInput
                   style={m.notaInput}
@@ -218,7 +271,6 @@ export default function DetalleProducto() {
                   numberOfLines={3}
                 />
 
-                {/* Resumen */}
                 {selDia && selHorario && (
                   <View style={m.resumen}>
                     <Text style={m.resumenText}>
@@ -227,13 +279,19 @@ export default function DetalleProducto() {
                   </View>
                 )}
 
-                {/* Botón confirmar */}
+                {error ? (
+                  <Text style={m.errorText}>{error}</Text>
+                ) : null}
+
                 <TouchableOpacity
-                  style={[m.confirmBtn, !canConfirm && m.confirmBtnDisabled]}
-                  onPress={() => canConfirm && setConfirmed(true)}
-                  disabled={!canConfirm}
+                  style={[m.confirmBtn, (!canConfirm || loading) && m.confirmBtnDisabled]}
+                  onPress={handleReservar}
+                  disabled={!canConfirm || loading}
                 >
-                  <Text style={m.confirmBtnText}>{'CONFIRMAR RESERVA'}</Text>
+                  {loading
+                    ? <ActivityIndicator color="#FFFFFF" />
+                    : <Text style={m.confirmBtnText}>{'CONFIRMAR RESERVA'}</Text>
+                  }
                 </TouchableOpacity>
 
               </ScrollView>
@@ -268,7 +326,6 @@ const m = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 20,
   },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -278,7 +335,6 @@ const m = StyleSheet.create({
   title:    { fontSize: 17, fontWeight: '700', color: '#2C2A22' },
   subtitle: { fontSize: 13, color: MUTED, marginTop: 2 },
   closeX:   { fontSize: 18, color: MUTED, padding: 4 },
-
   note: {
     fontSize: 13,
     color: '#555555',
@@ -288,7 +344,6 @@ const m = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: BORDER,
   },
-
   label: {
     fontSize: 10,
     color: MUTED,
@@ -297,42 +352,16 @@ const m = StyleSheet.create({
     marginBottom: 10,
     fontWeight: '600',
   },
-
-  // Dias
-  diaRow: { gap: 8, paddingBottom: 4 },
-  diaBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    backgroundColor: '#FAFAF7',
-  },
+  diaRow:           { gap: 8, paddingBottom: 4 },
+  diaBtn:           { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7' },
   diaBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   diaBtnText:       { fontSize: 13, color: '#555555' },
   diaBtnTextActive: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
-
-  // Horarios
-  horariosGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  horarioBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    backgroundColor: '#FAFAF7',
-    minWidth: 70,
-    alignItems: 'center',
-  },
+  horariosGrid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  horarioBtn:           { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7', minWidth: 70, alignItems: 'center' },
   horarioBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   horarioBtnText:       { fontSize: 13, color: '#4A4035' },
   horarioBtnTextActive: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
-
-  // Nota
   notaInput: {
     borderWidth: 0.5,
     borderColor: BORDER,
@@ -345,30 +374,12 @@ const m = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: 16,
   },
-
-  // Resumen
-  resumen: {
-    backgroundColor: CREAM,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-  },
+  resumen:     { backgroundColor: CREAM, borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 0.5, borderColor: BORDER },
   resumenText: { fontSize: 13, color: BURGUNDY, fontWeight: '600' },
-
-  // Confirmar
-  confirmBtn: {
-    backgroundColor: BURGUNDY,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  errorText:   { fontSize: 13, color: BURGUNDY, marginBottom: 12, textAlign: 'center' },
+  confirmBtn:         { backgroundColor: BURGUNDY, paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 8 },
   confirmBtnDisabled: { backgroundColor: BORDER },
   confirmBtnText:     { color: '#FFFFFF', fontSize: 14, fontWeight: '700', letterSpacing: 0.8 },
-
-  // Exito
   successBox:    { alignItems: 'center', paddingVertical: 32 },
   successIcon:   { fontSize: 48, color: BURGUNDY, marginBottom: 16 },
   successTitle:  { fontSize: 20, fontWeight: '700', color: BURGUNDY, marginBottom: 8 },
