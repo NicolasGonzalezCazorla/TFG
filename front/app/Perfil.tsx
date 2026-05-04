@@ -20,7 +20,7 @@ const CREAM      = '#F5F0E8';
 const BORDER     = '#C4B89A';
 const MUTED      = '#9A8E7A';
 const GOLD       = '#C6A75E';
-const API_URL    = 'http://localhost:3000/api';
+import { API_URL } from '../constants';
 
 type Reserva = {
   id: string;

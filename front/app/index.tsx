@@ -18,7 +18,7 @@ import SectionHeader from '../components/SectionHeader';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
 
-const API_URL = 'http://localhost:3000/api';
+import { API_URL } from '../constants';
 
 type Product = {
   id: string;

@@ -17,6 +17,7 @@ import Footer from '../../components/footer';
 import Button from '../../components/Button';
 import { detalleStyles as s } from '../Detalle.styles';
 import { useAuth } from '../../context/AuthContext';
+import { API_URL } from '../../constants';
 
 const BREAKPOINT    = 768;
 const BURGUNDY      = '#63202C';
@@ -24,7 +25,6 @@ const CREAM         = '#F5F0E8';
 const BORDER        = '#C4B89A';
 const MUTED         = '#9A8E7A';
 const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/500/500' };
-const API_URL       = 'http://localhost:3000/api';
 
 const DIAS_RECOGIDA = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'];
 const HORARIOS_RECOGIDA = [

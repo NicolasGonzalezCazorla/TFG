@@ -35,13 +35,8 @@ export async function GET(req) {
       .single();
 
     let query = supabaseAdmin
-  .from('citas')
-  .select(`
-    *,
-    servicios(nombre, precio),
-    perfiles(nombre, apellidos),
-    cancelador:cancelado_por(nombre, apellidos)
-  `);
+      .from('citas')
+      .select('*, servicios(nombre, precio), perfiles(nombre, apellidos)');
 
     if (perfil?.rol !== 'admin') {
       query = query.eq('usuario_id', user.id);
@@ -56,8 +51,28 @@ export async function GET(req) {
       );
     }
 
+    // Enriquece con cancelador manualmente solo para admin
+    let citas = data;
+    if (perfil?.rol === 'admin' && data.length > 0) {
+      const canceladorIds = data
+        .filter((c) => c.cancelado_por)
+        .map((c) => c.cancelado_por);
+
+      if (canceladorIds.length > 0) {
+        const { data: canceladores } = await supabaseAdmin
+          .from('perfiles')
+          .select('id, nombre, apellidos')
+          .in('id', canceladorIds);
+
+        citas = data.map((c) => ({
+          ...c,
+          cancelador: canceladores?.find((p) => p.id === c.cancelado_por) ?? null,
+        }));
+      }
+    }
+
     return NextResponse.json(
-      { citas: data },
+      { citas },
       { status: 200, headers: corsHeaders }
     );
 
@@ -200,8 +215,6 @@ export async function DELETE(req) {
 
     const { id } = await req.json();
 
-    // Busca la cita sin filtrar por usuario_id
-    // para que el admin también pueda cancelar
     const { data: cita, error: citaError } = await supabaseAdmin
       .from('citas')
       .select('*')
@@ -215,14 +228,13 @@ export async function DELETE(req) {
       );
     }
 
-    // Verificar que es el dueño o admin
     const { data: perfilUsuario } = await supabaseAdmin
       .from('perfiles')
       .select('rol')
       .eq('id', user.id)
       .single();
 
-    const esAdmin = perfilUsuario?.rol === 'admin';
+    const esAdmin  = perfilUsuario?.rol === 'admin';
     const esDuenio = cita.usuario_id === user.id;
 
     if (!esAdmin && !esDuenio) {
@@ -232,7 +244,6 @@ export async function DELETE(req) {
       );
     }
 
-    // Solo el cliente tiene restriccion de 24h, el admin puede cancelar siempre
     if (!esAdmin) {
       const citaFechaHora = new Date(`${cita.fecha}T${cita.hora}`);
       const ahora         = new Date();

@@ -7,13 +7,13 @@ import {
   TextInput,
   useWindowDimensions,
   StyleSheet,
-  Modal,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../constants';
 
 const MONTHS    = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MONTHS_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -29,7 +29,6 @@ const BURGUNDY   = '#63202C';
 const CREAM      = '#F5F0E8';
 const BORDER     = '#C4B89A';
 const MUTED      = '#9A8E7A';
-const API_URL    = 'http://localhost:3000/api';
 
 type Servicio = {
   id: string;
@@ -96,7 +95,7 @@ export default function Reserva() {
 
   const calWidth = isDesktop
     ? Math.min(width * 0.55, 720) - 64
-    : width - 48 - 32;
+    : width - 32;
   const cellSize = Math.floor(calWidth / 7);
 
   const openDay = (d: number) => {
@@ -174,14 +173,14 @@ export default function Reserva() {
       );
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      const dt           = new Date(curYear, curMonth, d);
-      const isToday      = dt.toDateString() === today.toDateString();
-      const isPast       = dt < today;
-      const isWeekend    = dt.getDay() === 0 || dt.getDay() === 6;
-      const isSelected   = selDate === d && showOverlay;
-      const disabled     = isPast || isWeekend;
-      const diaOcupado   = horariosOcupados[String(d).padStart(2, '0')] ?? horariosOcupados[String(d)] ?? [];
-      const todoOcupado  = diaOcupado.length >= ALL_SLOTS.length;
+      const dt          = new Date(curYear, curMonth, d);
+      const isToday     = dt.toDateString() === today.toDateString();
+      const isPast      = dt < today;
+      const isWeekend   = dt.getDay() === 0 || dt.getDay() === 6;
+      const isSelected  = selDate === d && showOverlay;
+      const disabled    = isPast || isWeekend;
+      const diaOcupado  = horariosOcupados[String(d).padStart(2, '0')] ?? horariosOcupados[String(d)] ?? [];
+      const todoOcupado = diaOcupado.length >= ALL_SLOTS.length;
 
       cells.push(
         <TouchableOpacity
@@ -224,45 +223,43 @@ export default function Reserva() {
     const booked = horariosOcupados[diaKey] ?? horariosOcupados[String(selDate)] ?? [];
 
     return (
-      <View style={{ flex: 1 }}>
+      <View>
         <View style={s.slotsPanelHeader}>
           <Text style={s.slotsPanelDate}>
             {selDate}{' de '}{MONTHS_ES[curMonth]}
           </Text>
-          <TouchableOpacity onPress={() => { setShowOverlay(false); setShowPanel(false); }}>
+          <TouchableOpacity onPress={resetAll}>
             <Text style={s.closePanelBtn}>{'✕'}</Text>
           </TouchableOpacity>
         </View>
         <Text style={s.slotsLabel}>{'Horarios disponibles'}</Text>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {ALL_SLOTS.map((slot) => {
-            const isBooked  = booked.includes(slot);
-            const isSelSlot = selSlot === slot;
-            return (
-              <TouchableOpacity
-                key={slot}
-                style={[
-                  s.slotRow,
-                  isBooked  && s.slotRowBooked,
-                  isSelSlot && s.slotRowSelected,
-                ]}
-                onPress={() => !isBooked && selectSlot(slot)}
-                activeOpacity={isBooked ? 1 : 0.7}
-                disabled={isBooked}
-              >
-                <Text style={[
-                  s.slotText,
-                  isBooked  && s.slotTextBooked,
-                  isSelSlot && s.slotTextSelected,
-                ]}>
-                  {slot}
-                </Text>
-                {isBooked  && <Text style={s.slotOcupado}>{'No disponible'}</Text>}
-                {isSelSlot && <Text style={s.slotSelIcon}>{'✓'}</Text>}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {ALL_SLOTS.map((slot) => {
+          const isBooked  = booked.includes(slot);
+          const isSelSlot = selSlot === slot;
+          return (
+            <TouchableOpacity
+              key={slot}
+              style={[
+                s.slotRow,
+                isBooked  && s.slotRowBooked,
+                isSelSlot && s.slotRowSelected,
+              ]}
+              onPress={() => !isBooked && selectSlot(slot)}
+              activeOpacity={isBooked ? 1 : 0.7}
+              disabled={isBooked}
+            >
+              <Text style={[
+                s.slotText,
+                isBooked  && s.slotTextBooked,
+                isSelSlot && s.slotTextSelected,
+              ]}>
+                {slot}
+              </Text>
+              {isBooked  && <Text style={s.slotOcupado}>{'No disponible'}</Text>}
+              {isSelSlot && <Text style={s.slotSelIcon}>{'✓'}</Text>}
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -285,32 +282,30 @@ export default function Reserva() {
       );
     }
     return (
-      <View style={{ flex: 1 }}>
+      <View>
         <Text style={s.confirmPanelTitle}>{'Confirmar reserva'}</Text>
         <Text style={s.confirmPanelDate}>
           {selDate}{' de '}{MONTHS_ES[curMonth]}{' · '}{selSlot}{'h'}
         </Text>
 
         <Text style={s.confirmLabel}>{'Servicio'}</Text>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 200 }}>
-          {servicios.map((serv) => (
-            <TouchableOpacity
-              key={serv.id}
-              style={[s.servicioRow, selServicio?.id === serv.id && s.servicioRowSelected]}
-              onPress={() => setSelServicio(serv)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[s.servicioName, selServicio?.id === serv.id && s.servicioNameSelected]}>
-                  {serv.nombre}
-                </Text>
-                <Text style={s.servicioDuration}>{serv.duracion}{' min'}</Text>
-              </View>
-              {selServicio?.id === serv.id && (
-                <Text style={s.servicioCheck}>{'✓'}</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {servicios.map((serv) => (
+          <TouchableOpacity
+            key={serv.id}
+            style={[s.servicioRow, selServicio?.id === serv.id && s.servicioRowSelected]}
+            onPress={() => setSelServicio(serv)}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[s.servicioName, selServicio?.id === serv.id && s.servicioNameSelected]}>
+                {serv.nombre}
+              </Text>
+              <Text style={s.servicioDuration}>{serv.duracion}{' min'}</Text>
+            </View>
+            {selServicio?.id === serv.id && (
+              <Text style={s.servicioCheck}>{'✓'}</Text>
+            )}
+          </TouchableOpacity>
+        ))}
 
         <Text style={[s.confirmLabel, { marginTop: 12 }]}>{'Aclaracion'}</Text>
         <TextInput
@@ -329,6 +324,8 @@ export default function Reserva() {
           </Text>
         )}
 
+        {error ? <Text style={s.errorText}>{error}</Text> : null}
+
         <TouchableOpacity
           style={[s.confirmBtn, (!canConfirm || loading) && s.confirmBtnDisabled]}
           onPress={handleConfirmar}
@@ -343,7 +340,6 @@ export default function Reserva() {
     );
   };
 
-  // ── Calendario compartido ──
   const renderCalCard = () => (
     <View style={[s.calCard, isDesktop && s.calCardDesktop]}>
       <View style={s.calHeader}>
@@ -392,7 +388,6 @@ export default function Reserva() {
           </Text>
 
           {isDesktop ? (
-            // ── Desktop: 3 columnas ──
             <View style={s.mainLayoutDesktop}>
               {renderCalCard()}
               {showOverlay && (
@@ -407,38 +402,30 @@ export default function Reserva() {
               )}
             </View>
           ) : (
-            // ── Móvil: calendario + Modal ──
             <>
               {renderCalCard()}
-              <Modal
-                visible={showOverlay}
-                animationType="slide"
-                transparent
-                onRequestClose={() => { setShowOverlay(false); setShowPanel(false); }}
-              >
-                <View style={s.modalBackdrop}>
-                  <View style={s.modalSheet}>
-                    <View style={s.modalHandle} />
-                    {!showPanel ? (
-                      <View style={{ flex: 1 }}>
-                        {renderSlotsContent()}
-                      </View>
-                    ) : (
-                      <ScrollView showsVerticalScrollIndicator={false}>
-                        <TouchableOpacity
-                          onPress={() => setShowPanel(false)}
-                          style={{ marginBottom: 12 }}
-                        >
-                          <Text style={{ color: BURGUNDY, fontSize: 13, fontWeight: '600' }}>
-                            {'← Horarios'}
-                          </Text>
-                        </TouchableOpacity>
-                        {renderConfirmContent()}
-                      </ScrollView>
-                    )}
-                  </View>
+
+              {/* Móvil: slots debajo del calendario */}
+              {showOverlay && !showPanel && (
+                <View style={s.mobilePanelCard}>
+                  {renderSlotsContent()}
                 </View>
-              </Modal>
+              )}
+
+              {/* Móvil: confirmación */}
+              {showPanel && (
+                <View style={s.mobilePanelCard}>
+                  <TouchableOpacity
+                    onPress={() => setShowPanel(false)}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Text style={{ color: BURGUNDY, fontSize: 13, fontWeight: '600' }}>
+                      {'← Horarios'}
+                    </Text>
+                  </TouchableOpacity>
+                  {renderConfirmContent()}
+                </View>
+              )}
             </>
           )}
 
@@ -469,9 +456,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     overflow: 'hidden',
-    marginBottom: 48,
+    marginBottom: 12,
   },
-  calCardDesktop: { flex: 1 },
+  calCardDesktop: { flex: 1, marginBottom: 48 },
 
   calHeader: {
     flexDirection: 'row',
@@ -521,6 +508,16 @@ const s = StyleSheet.create({
 
   dot:         { width: 3, height: 3, borderRadius: 2, backgroundColor: BURGUNDY, position: 'absolute', bottom: 5 },
   dotSelected: { backgroundColor: '#FFFFFF' },
+
+  // ── Panel móvil ──
+  mobilePanelCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    marginBottom: 24,
+  },
 
   // ── Slots panel (desktop) ──
   slotsPanel: {
@@ -605,32 +602,10 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
 
+  errorText:          { fontSize: 12, color: BURGUNDY, marginBottom: 8, textAlign: 'center' },
   confirmBtn:         { backgroundColor: BURGUNDY, paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
   confirmBtnDisabled: { backgroundColor: BORDER },
   confirmBtnText:     { color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
-
-  // ── Modal móvil ──
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 48,
-    maxHeight: '88%',
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: BORDER,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
 
   successBox:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
   successCheck:   { fontSize: 40, color: BURGUNDY, marginBottom: 12 },
