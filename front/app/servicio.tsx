@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
+import { API_URL } from '../constants';
 
 const BREAKPOINT = 768;
 const BURGUNDY   = '#63202C';
@@ -21,105 +23,45 @@ const GOLD       = '#C6A75E';
 
 const CATEGORIAS = ['Todos', 'Facial', 'Corporal', 'Cabello', 'Bienestar'];
 
-const SERVICIOS = [
-  {
-    id: '1',
-    name: 'Facial Glow',
-    category: 'Facial',
-    duration: '60 min',
-    price: '65',
-    description: 'Luz, hidratacion y tontura activa. Ritual completo de limpieza y luminosidad.',
-    image: { uri: 'https://picsum.photos/seed/facial1/400/300' },
-  },
-  {
-    id: '2',
-    name: 'Masaje Relajante',
-    category: 'Corporal',
-    duration: '75 min',
-    price: '80',
-    description: 'Descanso profundo con aceites esenciales premium. Libera tension muscular.',
-    image: { uri: 'https://picsum.photos/seed/massage2/400/300' },
-  },
-  {
-    id: '3',
-    name: 'Ritual Imperial',
-    category: 'Bienestar',
-    duration: '90 min',
-    price: '110',
-    description: 'Equilibrio y vitalidad integral. Experiencia holistica completa.',
-    image: { uri: 'https://picsum.photos/seed/ritual3/400/300' },
-  },
-  {
-    id: '4',
-    name: 'Hidratacion Profunda',
-    category: 'Facial',
-    duration: '45 min',
-    price: '50',
-    description: 'Tratamiento intensivo para pieles deshidratadas y apagadas.',
-    image: { uri: 'https://picsum.photos/seed/hydration/400/300' },
-  },
-  {
-    id: '5',
-    name: 'Tratamiento Capilar',
-    category: 'Cabello',
-    duration: '60 min',
-    price: '55',
-    description: 'Nutricion y brillo para todo tipo de cabello. Activos premium.',
-    image: { uri: 'https://picsum.photos/seed/hair/400/300' },
-  },
-  {
-    id: '6',
-    name: 'Exfoliacion Corporal',
-    category: 'Corporal',
-    duration: '50 min',
-    price: '60',
-    description: 'Elimina celulas muertas y deja la piel suave y renovada.',
-    image: { uri: 'https://picsum.photos/seed/exfoliation/400/300' },
-  },
-  {
-    id: '7',
-    name: 'Masaje Piedras Calientes',
-    category: 'Bienestar',
-    duration: '80 min',
-    price: '95',
-    description: 'Terapia con piedras volcanicas para una relajacion profunda.',
-    image: { uri: 'https://picsum.photos/seed/stones/400/300' },
-  },
-  {
-    id: '8',
-    name: 'Lifting Facial',
-    category: 'Facial',
-    duration: '70 min',
-    price: '85',
-    description: 'Tensor y reafirmante natural. Efecto lifting sin cirugia.',
-    image: { uri: 'https://picsum.photos/seed/lifting/400/300' },
-  },
-  {
-    id: '9',
-    name: 'Keratina Express',
-    category: 'Cabello',
-    duration: '90 min',
-    price: '75',
-    description: 'Alisa y nutre el cabello con resultados visibles desde la primera sesion.',
-    image: { uri: 'https://picsum.photos/seed/keratin/400/300' },
-  },
-];
+type Servicio = {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  duracion: number;
+  categoria: string;
+};
 
 export default function Servicio() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= BREAKPOINT;
   const router    = useRouter();
 
-  const [categoria, setCategoria] = useState('Todos');
-  const [orden,     setOrden]     = useState<'asc' | 'desc' | null>(null);
+  const [servicios,  setServicios]  = useState<Servicio[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [categoria,  setCategoria]  = useState('Todos');
+  const [orden,      setOrden]      = useState<'asc' | 'desc' | null>(null);
 
-  const serviciosFiltrados = SERVICIOS
-    .filter((s) => categoria === 'Todos' || s.category === categoria)
+  useEffect(() => {
+    fetch(`${API_URL}/servicios`)
+      .then(res => res.json())
+      .then(data => { if (data.servicios) setServicios(data.servicios); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const serviciosFiltrados = servicios
+    .filter((s) => categoria === 'Todos' || s.categoria === categoria)
     .sort((a, b) => {
-      if (orden === 'asc')  return Number(a.price) - Number(b.price);
-      if (orden === 'desc') return Number(b.price) - Number(a.price);
+      if (orden === 'asc')  return a.precio - b.precio;
+      if (orden === 'desc') return b.precio - a.precio;
       return 0;
     });
+
+  const getImage = (nombre: string) => {
+    const seed = nombre.toLowerCase().replace(/ /g, '_');
+    return { uri: `https://picsum.photos/seed/${seed}/400/300` };
+  };
 
   return (
     <View style={s.screen}>
@@ -143,7 +85,6 @@ export default function Servicio() {
 
           {/* ── Filtros ── */}
           <View style={[s.filtersCard, isDesktop && s.filtersCardDesktop]}>
-
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -181,19 +122,22 @@ export default function Servicio() {
                 </Text>
               </TouchableOpacity>
             </View>
-
           </View>
 
           {/* ── Resultado ── */}
-          <Text style={s.resultCount}>
-            {serviciosFiltrados.length}{' servicios disponibles'}
-          </Text>
+          {!loading && (
+            <Text style={s.resultCount}>
+              {serviciosFiltrados.length}{' servicios disponibles'}
+            </Text>
+          )}
 
-          {/* ── Lista servicios ── */}
-          {isDesktop ? (
-            // Desktop: grid 3 columnas
+          {/* ── Loading ── */}
+          {loading ? (
+            <ActivityIndicator color={BURGUNDY} style={{ marginTop: 40 }} />
+          ) : isDesktop ? (
+            // ── Desktop: grid 3 columnas ──
             (() => {
-              const rows: typeof SERVICIOS[] = [];
+              const rows: Servicio[][] = [];
               for (let i = 0; i < serviciosFiltrados.length; i += 3) {
                 rows.push(serviciosFiltrados.slice(i, i + 3));
               }
@@ -207,21 +151,21 @@ export default function Servicio() {
                       activeOpacity={0.85}
                     >
                       <Image
-                        source={servicio.image}
+                        source={getImage(servicio.nombre)}
                         style={s.desktopCardImage}
                         resizeMode="cover"
                       />
                       <View style={s.desktopCardContent}>
                         <View style={s.cardTopRow}>
-                          <Text style={s.cardCategory}>{servicio.category}</Text>
-                          <Text style={s.cardDuration}>{'⏱ '}{servicio.duration}</Text>
+                          <Text style={s.cardCategory}>{servicio.categoria}</Text>
+                          <Text style={s.cardDuration}>{'⏱ '}{servicio.duracion}{' min'}</Text>
                         </View>
-                        <Text style={s.cardName}>{servicio.name}</Text>
+                        <Text style={s.cardName}>{servicio.nombre}</Text>
                         <Text style={s.cardDesc} numberOfLines={2}>
-                          {servicio.description}
+                          {servicio.descripcion}
                         </Text>
                         <View style={s.cardBottom}>
-                          <Text style={s.cardPrice}>{servicio.price}{'€'}</Text>
+                          <Text style={s.cardPrice}>{servicio.precio}{'€'}</Text>
                           <View style={s.reservarBtn}>
                             <Text style={s.reservarBtnText}>{'RESERVAR'}</Text>
                           </View>
@@ -237,7 +181,7 @@ export default function Servicio() {
               ));
             })()
           ) : (
-            // Móvil: lista vertical
+            // ── Móvil: lista vertical ──
             serviciosFiltrados.map((servicio) => (
               <TouchableOpacity
                 key={servicio.id}
@@ -246,21 +190,21 @@ export default function Servicio() {
                 activeOpacity={0.85}
               >
                 <Image
-                  source={servicio.image}
+                  source={getImage(servicio.nombre)}
                   style={s.mobileCardImage}
                   resizeMode="cover"
                 />
                 <View style={s.mobileCardContent}>
                   <View style={s.cardTopRow}>
-                    <Text style={s.cardCategory}>{servicio.category}</Text>
-                    <Text style={s.cardDuration}>{'⏱ '}{servicio.duration}</Text>
+                    <Text style={s.cardCategory}>{servicio.categoria}</Text>
+                    <Text style={s.cardDuration}>{'⏱ '}{servicio.duracion}{' min'}</Text>
                   </View>
-                  <Text style={s.cardName}>{servicio.name}</Text>
+                  <Text style={s.cardName}>{servicio.nombre}</Text>
                   <Text style={s.cardDesc} numberOfLines={2}>
-                    {servicio.description}
+                    {servicio.descripcion}
                   </Text>
                   <View style={s.cardBottom}>
-                    <Text style={s.cardPrice}>{servicio.price}{'€'}</Text>
+                    <Text style={s.cardPrice}>{servicio.precio}{'€'}</Text>
                     <View style={s.reservarBtn}>
                       <Text style={s.reservarBtnText}>{'RESERVAR'}</Text>
                     </View>
@@ -288,7 +232,6 @@ const s = StyleSheet.create({
   pageTitle:    { fontWeight: '700', color: '#2C2A22', marginBottom: 4 },
   pageSubtitle: { fontSize: 13, color: MUTED },
 
-  // ── Filtros ──
   filtersCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -304,109 +247,37 @@ const s = StyleSheet.create({
     gap: 16,
   },
 
-  categoriasRow: { gap: 8, paddingVertical: 2 },
-  catBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    backgroundColor: '#FAFAF7',
-  },
-  catBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
-  catBtnText:       { fontSize: 12, color: '#555555' },
-  catBtnTextActive: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
+  categoriasRow:      { gap: 8, paddingVertical: 2 },
+  catBtn:             { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7' },
+  catBtnActive:       { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
+  catBtnText:         { fontSize: 12, color: '#555555' },
+  catBtnTextActive:   { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
 
   ordenRow:           { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ordenLabel:         { fontSize: 12, color: MUTED },
-  ordenBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    backgroundColor: '#FAFAF7',
-  },
+  ordenBtn:           { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7' },
   ordenBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   ordenBtnText:       { fontSize: 12, color: '#555555' },
   ordenBtnTextActive: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
 
   resultCount: { fontSize: 12, color: MUTED, marginBottom: 12 },
 
-  // ── Desktop grid ──
-  desktopRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
-  desktopCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-  },
+  desktopRow:          { flexDirection: 'row', gap: 16, marginBottom: 16 },
+  desktopCard:         { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
   desktopCardImage:    { width: '100%', height: 160 },
   desktopCardContent:  { padding: 14, gap: 6 },
 
-  // ── Mobile lista ──
-  mobileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  mobileCardImage:   { width: '100%', height: 160 },
-  mobileCardContent: { padding: 14, gap: 6 },
+  mobileCard:          { backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: BORDER, overflow: 'hidden', marginBottom: 12 },
+  mobileCardImage:     { width: '100%', height: 160 },
+  mobileCardContent:   { padding: 14, gap: 6 },
 
-  // ── Shared card styles ──
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardCategory: {
-    fontSize: 11,
-    color: GOLD,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardDuration: { fontSize: 11, color: MUTED },
-  cardName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#2C2A22',
-  },
-  cardDesc: {
-    fontSize: 12,
-    color: '#777777',
-    lineHeight: 17,
-  },
-  cardBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  cardPrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: BURGUNDY,
-  },
-  reservarBtn: {
-    backgroundColor: BURGUNDY,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  reservarBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
+  cardTopRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardCategory:  { fontSize: 11, color: GOLD, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardDuration:  { fontSize: 11, color: MUTED },
+  cardName:      { fontSize: 15, fontWeight: '700', color: '#2C2A22' },
+  cardDesc:      { fontSize: 12, color: '#777777', lineHeight: 17 },
+  cardBottom:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  cardPrice:     { fontSize: 18, fontWeight: '700', color: BURGUNDY },
+  reservarBtn:   { backgroundColor: BURGUNDY, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 },
+  reservarBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
 });
