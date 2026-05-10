@@ -12,6 +12,7 @@ export const homeStyles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'space-between',
   },
   scrollContentDesktop: {
     alignItems: 'center',

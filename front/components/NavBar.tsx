@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   Modal,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 
 const BURGUNDY = '#63202C';
@@ -52,8 +54,7 @@ export default function NavBar() {
           style={s.leftContainer}
           onPress={() => router.push('/')}
         >
-          <View style={s.goldCircle} />
-          <Text style={s.brandName}>{'Estetica Alicia'}</Text>
+          <Image source={require('../assets/images/Logo.png')} style={s.logo} />
         </TouchableOpacity>
 
         {/* Desktop: links + avatar */}
@@ -82,11 +83,7 @@ export default function NavBar() {
                 onPress={() => navegar('/Perfil')}
                 onLongPress={handleLogout}
               >
-                <View style={s.avatar}>
-                  <Text style={s.avatarText}>
-                    {usuario.nombre?.[0]?.toUpperCase() ?? 'U'}
-                  </Text>
-                </View>
+                <Image source={require('../assets/images/Logo.png')} style={s.avatar} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -106,11 +103,7 @@ export default function NavBar() {
                 onPress={() => navegar('/Perfil')}
                 style={{ marginRight: 12 }}
               >
-                <View style={s.avatar}>
-                  <Text style={s.avatarText}>
-                    {usuario.nombre?.[0]?.toUpperCase() ?? 'U'}
-                  </Text>
-                </View>
+                <Image source={require('../assets/images/Logo.png')} style={s.avatar} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -151,12 +144,11 @@ export default function NavBar() {
 
             {/* Cabecera */}
             <View style={s.mobileMenuHeader}>
-              <View style={s.leftContainer}>
-                <View style={s.goldCircle} />
-                <Text style={s.brandName}>{'Estetica Alicia'}</Text>
-              </View>
+              <TouchableOpacity style={s.leftContainer} onPress={() => router.push('/')}>
+                <Image source={require('../assets/images/Logo.png')} style={s.logo} />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setMenuOpen(false)}>
-                <Text style={s.closeBtn}>{'✕'}</Text>
+                <MaterialIcons name="close" size={24} color="#2C2A22" style={s.closeBtn} />
               </TouchableOpacity>
             </View>
 
@@ -237,8 +229,7 @@ const s = StyleSheet.create({
   },
 
   leftContainer: { flexDirection: 'row', alignItems: 'center' },
-  goldCircle:    { width: 24, height: 24, borderRadius: 12, backgroundColor: GOLD, marginRight: 10 },
-  brandName:     { fontSize: 18, fontWeight: '700', color: '#5a1e2a' },
+  logo:          { width: 40, height: 40, resizeMode: 'contain' },
 
   rightContainer: { flexDirection: 'row', alignItems: 'center' },
   navLinks:       { flexDirection: 'row', marginRight: 15 },
@@ -250,13 +241,9 @@ const s = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 17.5,
-    backgroundColor: '#F5F0E8',
     borderWidth: 1,
     borderColor: GOLD,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  avatarText: { fontSize: 14, fontWeight: '700', color: BURGUNDY },
 
   loginBtn: {
     borderWidth: 1,

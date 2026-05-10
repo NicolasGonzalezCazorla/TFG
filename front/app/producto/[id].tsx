@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import NavBar from '../../components/NavBar';
 import Footer from '../../components/footer';
 import Button from '../../components/Button';
@@ -19,12 +20,11 @@ import { detalleStyles as s } from '../Detalle.styles';
 import { useAuth } from '../../context/AuthContext';
 import { API_URL } from '../../constants';
 
-const BREAKPOINT    = 768;
-const BURGUNDY      = '#63202C';
-const CREAM         = '#F5F0E8';
-const BORDER        = '#C4B89A';
-const MUTED         = '#9A8E7A';
-const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/500/500' };
+const BREAKPOINT = 768;
+const BURGUNDY   = '#63202C';
+const CREAM      = '#F5F0E8';
+const BORDER     = '#C4B89A';
+const MUTED      = '#9A8E7A';
 
 const DIAS_RECOGIDA = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'];
 const HORARIOS_RECOGIDA = [
@@ -44,6 +44,11 @@ export default function DetalleProducto() {
   const name        = str(raw.name);
   const price       = str(raw.price);
   const description = str(raw.description);
+  const imagen_url  = str(raw.imagen_url);
+
+  const productImage = imagen_url
+    ? { uri: imagen_url }
+    : { uri: 'https://picsum.photos/seed/lipstick/500/500' };
 
   const { width } = useWindowDimensions();
   const isDesktop  = width >= BREAKPOINT;
@@ -69,22 +74,18 @@ export default function DetalleProducto() {
 
   const handleReservar = async () => {
     if (!canConfirm) return;
-
-    // Si no hay sesión, redirige al login
     if (!usuario || !token) {
       setShowModal(false);
       router.push('/login');
       return;
     }
-
     try {
       setLoading(true);
       setError('');
-
       const res = await fetch(`${API_URL}/reservas`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type':  'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
@@ -95,17 +96,13 @@ export default function DetalleProducto() {
           estado:        'pendiente',
         }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || 'Error al realizar la reserva');
         return;
       }
-
       setConfirmed(true);
-
-    } catch (e: any) {
+    } catch {
       setError('Error de conexion. Intentalo de nuevo.');
     } finally {
       setLoading(false);
@@ -137,7 +134,7 @@ export default function DetalleProducto() {
 
             <View style={[s.leftCol, isDesktop && s.leftColDesktop]}>
               <Image
-                source={PRODUCT_IMAGE}
+                source={productImage}
                 style={s.productImage}
                 resizeMode="contain"
               />
@@ -170,7 +167,6 @@ export default function DetalleProducto() {
                 </View>
               </View>
 
-              {/* Aviso si no hay sesión */}
               {!usuario && (
                 <Text style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>
                   {'Debes iniciar sesion para reservar'}
@@ -196,7 +192,7 @@ export default function DetalleProducto() {
 
             {confirmed ? (
               <View style={m.successBox}>
-                <Text style={m.successIcon}>{'✓'}</Text>
+                <MaterialIcons name="check-circle" size={48} color={BURGUNDY} />
                 <Text style={m.successTitle}>{'Reserva confirmada'}</Text>
                 <Text style={m.successSub}>{name}</Text>
                 <Text style={m.successDetail}>
@@ -218,7 +214,7 @@ export default function DetalleProducto() {
                     <Text style={m.subtitle}>{name}{' · '}{price}{'€'}</Text>
                   </View>
                   <TouchableOpacity onPress={resetModal}>
-                    <Text style={m.closeX}>{'✕'}</Text>
+                    <MaterialIcons name="close" size={24} color={MUTED} />
                   </TouchableOpacity>
                 </View>
 
@@ -279,9 +275,7 @@ export default function DetalleProducto() {
                   </View>
                 )}
 
-                {error ? (
-                  <Text style={m.errorText}>{error}</Text>
-                ) : null}
+                {error ? <Text style={m.errorText}>{error}</Text> : null}
 
                 <TouchableOpacity
                   style={[m.confirmBtn, (!canConfirm || loading) && m.confirmBtnDisabled]}
@@ -299,90 +293,44 @@ export default function DetalleProducto() {
           </View>
         </View>
       </Modal>
-
     </View>
   );
 }
 
 const m = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 48,
-    maxHeight: '90%',
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: BORDER,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet:    { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 48, maxHeight: '90%' },
+  handle:   { width: 40, height: 4, borderRadius: 2, backgroundColor: BORDER, alignSelf: 'center', marginBottom: 20 },
+
+  header:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   title:    { fontSize: 17, fontWeight: '700', color: '#2C2A22' },
   subtitle: { fontSize: 13, color: MUTED, marginTop: 2 },
-  closeX:   { fontSize: 18, color: MUTED, padding: 4 },
-  note: {
-    fontSize: 13,
-    color: '#555555',
-    lineHeight: 19,
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: BORDER,
-  },
-  label: {
-    fontSize: 10,
-    color: MUTED,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    fontWeight: '600',
-  },
+  note:     { fontSize: 13, color: '#555555', lineHeight: 19, marginBottom: 20, paddingBottom: 16, borderBottomWidth: 0.5, borderBottomColor: BORDER },
+  label:    { fontSize: 10, color: MUTED, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10, fontWeight: '600' },
+
   diaRow:           { gap: 8, paddingBottom: 4 },
   diaBtn:           { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7' },
   diaBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   diaBtnText:       { fontSize: 13, color: '#555555' },
   diaBtnTextActive: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
+
   horariosGrid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   horarioBtn:           { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7', minWidth: 70, alignItems: 'center' },
   horarioBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   horarioBtnText:       { fontSize: 13, color: '#4A4035' },
   horarioBtnTextActive: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
-  notaInput: {
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 13,
-    color: '#2C2A22',
-    backgroundColor: '#FAFAF7',
-    minHeight: 70,
-    textAlignVertical: 'top',
-    marginBottom: 16,
-  },
+
+  notaInput:   { borderWidth: 0.5, borderColor: BORDER, borderRadius: 8, padding: 12, fontSize: 13, color: '#2C2A22', backgroundColor: '#FAFAF7', minHeight: 70, textAlignVertical: 'top', marginBottom: 16 },
   resumen:     { backgroundColor: CREAM, borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 0.5, borderColor: BORDER },
   resumenText: { fontSize: 13, color: BURGUNDY, fontWeight: '600' },
   errorText:   { fontSize: 13, color: BURGUNDY, marginBottom: 12, textAlign: 'center' },
+
   confirmBtn:         { backgroundColor: BURGUNDY, paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginBottom: 8 },
   confirmBtnDisabled: { backgroundColor: BORDER },
   confirmBtnText:     { color: '#FFFFFF', fontSize: 14, fontWeight: '700', letterSpacing: 0.8 },
+
   successBox:    { alignItems: 'center', paddingVertical: 32 },
-  successIcon:   { fontSize: 48, color: BURGUNDY, marginBottom: 16 },
-  successTitle:  { fontSize: 20, fontWeight: '700', color: BURGUNDY, marginBottom: 8 },
+  successTitle:  { fontSize: 20, fontWeight: '700', color: BURGUNDY, marginBottom: 8, marginTop: 12 },
   successSub:    { fontSize: 15, color: '#2C2A22', fontWeight: '600', marginBottom: 4 },
   successDetail: { fontSize: 14, color: '#4A4035', marginBottom: 8 },
   successNote:   { fontSize: 12, color: MUTED, textAlign: 'center', lineHeight: 18, marginBottom: 28, paddingHorizontal: 16 },

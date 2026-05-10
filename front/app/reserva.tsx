@@ -4,12 +4,12 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   useWindowDimensions,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
 import { useAuth } from '../context/AuthContext';
@@ -30,11 +30,15 @@ const CREAM      = '#F5F0E8';
 const BORDER     = '#C4B89A';
 const MUTED      = '#9A8E7A';
 
-type Servicio = {
-  id: string;
-  nombre: string;
-  duracion: number;
-};
+// Desktop layout constants
+const MAX_W        = 1280;
+const H_PAD        = 48;
+const SLOTS_W      = 200;
+const CONFIRM_W    = 230;
+const GAP          = 16;
+const CAL_GRID_PAD = 32;
+
+type Servicio = { id: string; nombre: string; duracion: number };
 
 export default function Reserva() {
   const { width } = useWindowDimensions();
@@ -42,330 +46,298 @@ export default function Reserva() {
   const router    = useRouter();
   const { usuario, token } = useAuth();
 
-  const today = new Date(); today.setHours(0,0,0,0);
+  // Stable — created once on mount, never recreated on re-render
+  const today = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
   const [curYear,          setCurYear]          = useState(today.getFullYear());
   const [curMonth,         setCurMonth]         = useState(today.getMonth());
   const [selDate,          setSelDate]          = useState<number | null>(null);
   const [selSlot,          setSelSlot]          = useState<string | null>(null);
   const [selServicio,      setSelServicio]      = useState<Servicio | null>(null);
-  const [aclaracion,       setAclaracion]       = useState('');
   const [confirmed,        setConfirmed]        = useState(false);
-  const [showOverlay,      setShowOverlay]      = useState(false);
-  const [showPanel,        setShowPanel]        = useState(false);
+  const [showSlots,        setShowSlots]        = useState(false);
+  const [showConfirm,      setShowConfirm]      = useState(false);
   const [servicios,        setServicios]        = useState<Servicio[]>([]);
   const [loading,          setLoading]          = useState(false);
   const [error,            setError]            = useState('');
   const [horariosOcupados, setHorariosOcupados] = useState<Record<string, string[]>>({});
 
+  // ── Width maths — derived from useWindowDimensions, updates on resize ────
+  // ── Width maths — always derived from raw `width`, never from layout events ─
+  // Mobile container: paddingHorizontal 14px each side = 28px total
+  // Desktop container: paddingHorizontal H_PAD each side, capped at MAX_W
+  const MOBILE_CONTAINER_PAD = 28; // 14px × 2
+  const screenW    = Math.min(width, MAX_W);
+  const calCardW   = isDesktop
+    ? screenW - H_PAD * 2 - SLOTS_W - CONFIRM_W - GAP * 2
+    : width - MOBILE_CONTAINER_PAD; // full screen width minus container padding
+
+  // gap:2 between 7 cols = 6 gaps = 12px; borderWidth 1px each side = 2px
+  const gridPadH = isDesktop ? CAL_GRID_PAD : 12;
+  const gridW    = calCardW - 2 - gridPadH * 2;
+  const cellSize = Math.max(Math.floor((gridW - 12) / 7), 32);
+
+  // Derived from curYear/curMonth — recomputed whenever month changes
+  const firstDay = React.useMemo(() => {
+    const fd = new Date(curYear, curMonth, 1).getDay();
+    // Convert JS Sunday=0…Saturday=6 → ISO Monday=0…Sunday=6
+    return fd === 0 ? 6 : fd - 1;
+  }, [curYear, curMonth]);
+
+  const daysInMonth = React.useMemo(
+    () => new Date(curYear, curMonth + 1, 0).getDate(),
+    [curYear, curMonth]
+  );
+
+  // ── Data ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${API_URL}/servicios`)
-      .then(res => res.json())
-      .then(data => { if (data.servicios) setServicios(data.servicios); })
+      .then(r => r.json())
+      .then(d => { if (d.servicios) setServicios(d.servicios); })
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    cargarHorariosOcupados();
-  }, [curMonth, curYear]);
+  useEffect(() => { loadBusy(); }, [curMonth, curYear]);
 
-  const cargarHorariosOcupados = async () => {
+  const loadBusy = async () => {
     try {
-      const res  = await fetch(
-        `${API_URL}/citas/disponibilidad?mes=${curMonth + 1}&anio=${curYear}`
-      );
-      const data = await res.json();
-      if (res.ok) setHorariosOcupados(data.ocupados ?? {});
-    } catch (e) {
-      console.error('Error cargando horarios:', e);
-    }
+      const r = await fetch(`${API_URL}/citas/disponibilidad?mes=${curMonth + 1}&anio=${curYear}`);
+      const d = await r.json();
+      if (r.ok) setHorariosOcupados(d.ocupados ?? {});
+    } catch (e) { console.error(e); }
   };
 
-  const changeMonth = (d: number) => {
-    let m = curMonth + d;
-    let y = curYear;
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const changeMonth = (dir: number) => {
+    let m = curMonth + dir, y = curYear;
     if (m > 11) { m = 0; y++; }
     if (m < 0)  { m = 11; y--; }
-    setCurMonth(m);
-    setCurYear(y);
+    setCurMonth(m); setCurYear(y);
+    resetAll();
   };
 
-  const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
-  let firstDay = new Date(curYear, curMonth, 1).getDay();
-  firstDay = firstDay === 0 ? 6 : firstDay - 1;
-
-  const calWidth = isDesktop
-    ? Math.min(width * 0.55, 720) - 64
-    : width - 32;
-  const cellSize = Math.floor(calWidth / 7);
-
   const openDay = (d: number) => {
-    setSelDate(d);
-    setSelSlot(null);
-    setConfirmed(false);
-    setShowOverlay(true);
-    setShowPanel(false);
-    setError('');
+    setSelDate(d); setSelSlot(null); setSelServicio(null);
+    setConfirmed(false); setShowSlots(true); setShowConfirm(false); setError('');
   };
 
   const selectSlot = (slot: string) => {
-    setSelSlot(slot);
-    setShowPanel(true);
-    setError('');
+    setSelSlot(slot); setShowConfirm(true); setError('');
   };
 
   const resetAll = () => {
-    setShowOverlay(false);
-    setShowPanel(false);
-    setSelDate(null);
-    setSelSlot(null);
-    setSelServicio(null);
-    setAclaracion('');
-    setConfirmed(false);
-    setError('');
-    cargarHorariosOcupados();
+    setShowSlots(false); setShowConfirm(false);
+    setSelDate(null); setSelSlot(null); setSelServicio(null);
+    setConfirmed(false); setError('');
+    loadBusy();
   };
 
   const handleConfirmar = async () => {
     if (!selSlot || !selServicio) return;
-    if (!usuario || !token) {
-      router.push('/login');
-      return;
-    }
+    if (!usuario || !token) { router.push('/login'); return; }
     try {
-      setLoading(true);
-      setError('');
-      const fechaStr = `${curYear}-${String(curMonth + 1).padStart(2, '0')}-${String(selDate).padStart(2, '0')}`;
+      setLoading(true); setError('');
+      const fecha = `${curYear}-${String(curMonth + 1).padStart(2,'0')}-${String(selDate).padStart(2,'0')}`;
       const res = await fetch(`${API_URL}/citas`, {
         method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          servicio_id: selServicio.id,
-          fecha:       fechaStr,
-          hora:        selSlot,
-          aclaracion:  aclaracion,
-          estado:      'pendiente',
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ servicio_id: selServicio.id, fecha, hora: selSlot, estado: 'pendiente' }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Error al crear la cita');
-        return;
-      }
-      setConfirmed(true);
-      cargarHorariosOcupados();
-    } catch (e) {
-      setError('Error de conexion. Intentalo de nuevo.');
-    } finally {
-      setLoading(false);
-    }
+      if (!res.ok) { setError(data.error || 'Error al crear la cita'); return; }
+      setConfirmed(true); loadBusy();
+    } catch { setError('Error de conexión. Inténtalo de nuevo.'); }
+    finally { setLoading(false); }
   };
 
-  const canConfirm = selSlot !== null && selServicio !== null;
-
-  const renderCalendar = () => {
+  // ── Render: cells ─────────────────────────────────────────────────────────
+  const renderCells = () => {
     const cells: React.ReactNode[] = [];
     for (let i = 0; i < firstDay; i++) {
-      cells.push(
-        <View key={`e-${i}`} style={[s.dayCell, { width: cellSize, height: cellSize }]} />
-      );
+      cells.push(<View key={`e${i}`} style={[s.cell, { width: cellSize, height: cellSize }]} />);
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      const dt          = new Date(curYear, curMonth, d);
-      const isToday     = dt.toDateString() === today.toDateString();
-      const isPast      = dt < today;
-      const isWeekend   = dt.getDay() === 0 || dt.getDay() === 6;
-      const isSelected  = selDate === d && showOverlay;
-      const disabled    = isPast || isWeekend;
-      const diaOcupado  = horariosOcupados[String(d).padStart(2, '0')] ?? horariosOcupados[String(d)] ?? [];
-      const todoOcupado = diaOcupado.length >= ALL_SLOTS.length;
+      const dt         = new Date(curYear, curMonth, d);
+      const isToday    = dt.toDateString() === today.toDateString();
+      const isPast     = dt < today;
+      const isWeekend  = dt.getDay() === 0 || dt.getDay() === 6;
+      const isSelected = selDate === d && showSlots;
+      const disabled   = isPast || isWeekend;
+      const key        = String(d).padStart(2, '0');
+      const occupied   = horariosOcupados[key] ?? horariosOcupados[String(d)] ?? [];
+      const isFull     = occupied.length >= ALL_SLOTS.length;
 
       cells.push(
         <TouchableOpacity
           key={d}
           style={[
-            s.dayCell,
+            s.cell,
             { width: cellSize, height: cellSize },
-            isToday     && s.dayCellToday,
-            isSelected  && s.dayCellSelected,
-            disabled    && s.dayCellDisabled,
-            todoOcupado && !disabled && s.dayCellFull,
+            isToday    && s.cellToday,
+            isSelected && s.cellSelected,
+            disabled   && s.cellDisabled,
+            isFull && !disabled && s.cellFull,
           ]}
-          onPress={() => !disabled && !todoOcupado && openDay(d)}
-          activeOpacity={disabled || todoOcupado ? 1 : 0.7}
+          onPress={() => !disabled && !isFull && openDay(d)}
+          activeOpacity={disabled || isFull ? 1 : 0.7}
         >
           <Text style={[
-            s.dayText,
-            { fontSize: isDesktop ? 16 : 13 },
-            isToday    && s.dayTextToday,
-            isSelected && s.dayTextSelected,
-            disabled   && s.dayTextDisabled,
+            s.cellText,
+            { fontSize: cellSize > 46 ? 15 : 12 },
+            isToday    && s.cellTextToday,
+            isSelected && s.cellTextSel,
+            disabled   && s.cellTextDisabled,
           ]}>
             {d}
           </Text>
-          {!disabled && !todoOcupado && (
-            <View style={[s.dot, isSelected && s.dotSelected]} />
-          )}
-          {todoOcupado && !disabled && (
-            <Text style={s.fullText}>{'lleno'}</Text>
-          )}
+          {!disabled && !isFull && <View style={[s.dot, isSelected && s.dotSel]} />}
+          {isFull && !disabled && <Text style={s.fullLabel}>lleno</Text>}
         </TouchableOpacity>
       );
     }
     return cells;
   };
 
-  const renderSlotsContent = () => {
+  // ── Render: slots ─────────────────────────────────────────────────────────
+  const renderSlots = (scrollable = true) => {
     if (selDate === null) return null;
-    const diaKey = String(selDate).padStart(2, '0');
-    const booked = horariosOcupados[diaKey] ?? horariosOcupados[String(selDate)] ?? [];
+    const key    = String(selDate).padStart(2, '0');
+    const booked = horariosOcupados[key] ?? horariosOcupados[String(selDate)] ?? [];
 
-    return (
-      <View>
-        <View style={s.slotsPanelHeader}>
-          <Text style={s.slotsPanelDate}>
-            {selDate}{' de '}{MONTHS_ES[curMonth]}
-          </Text>
-          <TouchableOpacity onPress={resetAll}>
-            <Text style={s.closePanelBtn}>{'✕'}</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={s.slotsLabel}>{'Horarios disponibles'}</Text>
-        {ALL_SLOTS.map((slot) => {
-          const isBooked  = booked.includes(slot);
-          const isSelSlot = selSlot === slot;
+    const slotList = (
+      <>
+        {ALL_SLOTS.map(slot => {
+          const isBooked = booked.includes(slot);
+          const isSel    = selSlot === slot;
           return (
             <TouchableOpacity
               key={slot}
-              style={[
-                s.slotRow,
-                isBooked  && s.slotRowBooked,
-                isSelSlot && s.slotRowSelected,
-              ]}
+              style={[s.slotRow, isBooked && s.slotBooked, isSel && s.slotSel]}
               onPress={() => !isBooked && selectSlot(slot)}
               activeOpacity={isBooked ? 1 : 0.7}
               disabled={isBooked}
             >
-              <Text style={[
-                s.slotText,
-                isBooked  && s.slotTextBooked,
-                isSelSlot && s.slotTextSelected,
-              ]}>
+              <Text style={[s.slotText, isBooked && s.slotTextBooked, isSel && s.slotTextSel]}>
                 {slot}
               </Text>
-              {isBooked  && <Text style={s.slotOcupado}>{'No disponible'}</Text>}
-              {isSelSlot && <Text style={s.slotSelIcon}>{'✓'}</Text>}
+              {isBooked && <Text style={s.slotUnavail}>No disponible</Text>}
+              {isSel    && <MaterialIcons name="check" size={13} color="#FFF" />}
             </TouchableOpacity>
           );
         })}
-      </View>
+      </>
     );
-  };
 
-  const renderConfirmContent = () => {
-    if (!selSlot) return null;
-    if (confirmed) {
-      return (
-        <View style={s.successBox}>
-          <Text style={s.successCheck}>{'✓'}</Text>
-          <Text style={s.successTitle}>{'Cita confirmada'}</Text>
-          <Text style={s.successSub}>
-            {selDate}{' de '}{MONTHS_ES[curMonth]}{' · '}{selSlot}{'h'}
-          </Text>
-          <Text style={s.successService}>{selServicio?.nombre}</Text>
-          <TouchableOpacity style={s.resetBtn} onPress={resetAll}>
-            <Text style={s.resetBtnText}>{'Reservar otra cita'}</Text>
+    return (
+      <>
+        <View style={s.panelHeader}>
+          <Text style={s.panelDate}>{selDate} de {MONTHS_ES[curMonth]}</Text>
+          <TouchableOpacity onPress={resetAll} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+            <MaterialIcons name="close" size={18} color={MUTED} />
           </TouchableOpacity>
         </View>
-      );
-    }
-    return (
-      <View>
-        <Text style={s.confirmPanelTitle}>{'Confirmar reserva'}</Text>
-        <Text style={s.confirmPanelDate}>
-          {selDate}{' de '}{MONTHS_ES[curMonth]}{' · '}{selSlot}{'h'}
-        </Text>
-
-        <Text style={s.confirmLabel}>{'Servicio'}</Text>
-        {servicios.map((serv) => (
-          <TouchableOpacity
-            key={serv.id}
-            style={[s.servicioRow, selServicio?.id === serv.id && s.servicioRowSelected]}
-            onPress={() => setSelServicio(serv)}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[s.servicioName, selServicio?.id === serv.id && s.servicioNameSelected]}>
-                {serv.nombre}
-              </Text>
-              <Text style={s.servicioDuration}>{serv.duracion}{' min'}</Text>
-            </View>
-            {selServicio?.id === serv.id && (
-              <Text style={s.servicioCheck}>{'✓'}</Text>
-            )}
-          </TouchableOpacity>
-        ))}
-
-        <Text style={[s.confirmLabel, { marginTop: 12 }]}>{'Aclaracion'}</Text>
-        <TextInput
-          style={s.aclaracionInput}
-          placeholder={'Escribe aqui cualquier detalle o preferencia...'}
-          placeholderTextColor={MUTED}
-          value={aclaracion}
-          onChangeText={setAclaracion}
-          multiline
-          numberOfLines={3}
-        />
-
-        {!usuario && (
-          <Text style={{ fontSize: 12, color: MUTED, marginBottom: 8, textAlign: 'center' }}>
-            {'Debes iniciar sesion para reservar'}
-          </Text>
-        )}
-
-        {error ? <Text style={s.errorText}>{error}</Text> : null}
-
-        <TouchableOpacity
-          style={[s.confirmBtn, (!canConfirm || loading) && s.confirmBtnDisabled]}
-          onPress={handleConfirmar}
-          disabled={!canConfirm || loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#FFFFFF" />
-            : <Text style={s.confirmBtnText}>{'RESERVAR CITA'}</Text>
-          }
-        </TouchableOpacity>
-      </View>
+        <Text style={s.panelLabel}>HORARIOS DISPONIBLES</Text>
+        {scrollable
+          ? <ScrollView showsVerticalScrollIndicator={false}>{slotList}</ScrollView>
+          : slotList
+        }
+      </>
     );
   };
 
-  const renderCalCard = () => (
-    <View style={[s.calCard, isDesktop && s.calCardDesktop]}>
+  // ── Render: confirm ───────────────────────────────────────────────────────
+  const renderConfirm = (scrollable = true) => {
+    if (!selSlot) return null;
+    if (confirmed) return (
+      <View style={s.successBox}>
+        <MaterialIcons name="check-circle" size={44} color={BURGUNDY} />
+        <Text style={s.successTitle}>Cita confirmada</Text>
+        <Text style={s.successSub}>{selDate} de {MONTHS_ES[curMonth]} · {selSlot}h</Text>
+        <Text style={s.successServ}>{selServicio?.nombre}</Text>
+        <TouchableOpacity style={s.resetBtn} onPress={resetAll}>
+          <Text style={s.resetBtnText}>Reservar otra cita</Text>
+        </TouchableOpacity>
+      </View>
+    );
+
+    const servList = (
+      <>
+        {servicios.map(serv => {
+          const isSel = selServicio?.id === serv.id;
+          return (
+            <TouchableOpacity
+              key={serv.id}
+              style={[s.servRow, isSel && s.servRowSel]}
+              onPress={() => setSelServicio(serv)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[s.servName, isSel && s.servNameSel]}>{serv.nombre}</Text>
+                <Text style={s.servDur}>{serv.duracion} min</Text>
+              </View>
+              {isSel && <MaterialIcons name="check" size={15} color={BURGUNDY} />}
+            </TouchableOpacity>
+          );
+        })}
+      </>
+    );
+
+    return (
+      <>
+        <Text style={s.confirmTitle}>Confirmar reserva</Text>
+        <Text style={s.confirmSub}>{selDate} de {MONTHS_ES[curMonth]} · {selSlot}h</Text>
+        <Text style={s.panelLabel}>SERVICIO</Text>
+        {scrollable
+          ? <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>{servList}</ScrollView>
+          : servList
+        }
+        {!usuario && <Text style={s.loginNote}>Debes iniciar sesión para reservar</Text>}
+        {!!error   && <Text style={s.errorText}>{error}</Text>}
+        <TouchableOpacity
+          style={[s.confirmBtn, (!selServicio || loading) && s.confirmBtnOff]}
+          onPress={handleConfirmar}
+          disabled={!selServicio || loading}
+        >
+          {loading
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={s.confirmBtnText}>RESERVAR CITA</Text>
+          }
+        </TouchableOpacity>
+      </>
+    );
+  };
+
+  // ── Render: calendar card ─────────────────────────────────────────────────
+  const renderCal = () => (
+    <View style={[s.calCard, { width: calCardW }]}>
       <View style={s.calHeader}>
         <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(-1)}>
-          <Text style={s.navBtnText}>{'‹'}</Text>
+          <Text style={s.navBtnText}>‹</Text>
         </TouchableOpacity>
-        <Text style={[s.monthLabel, { fontSize: isDesktop ? 16 : 14 }]}>
-          {MONTHS[curMonth]}{' '}{curYear}
+        <Text style={[s.monthLabel, { fontSize: isDesktop ? 16 : 15 }]}>
+          {MONTHS[curMonth]} {curYear}
         </Text>
         <TouchableOpacity style={s.navBtn} onPress={() => changeMonth(1)}>
-          <Text style={s.navBtnText}>{'›'}</Text>
+          <Text style={s.navBtnText}>›</Text>
         </TouchableOpacity>
       </View>
-      <View style={[s.weekdaysRow, { paddingHorizontal: isDesktop ? 32 : 8 }]}>
-        {WEEKDAYS.map((wd) => (
-          <Text key={wd} style={[s.weekdayText, { width: cellSize, fontSize: isDesktop ? 12 : 10 }]}>
-            {wd}
-          </Text>
+
+      <View style={[s.weekRow, { paddingHorizontal: gridPadH }]}>
+        {WEEKDAYS.map(wd => (
+          <Text key={wd} style={[s.weekLabel, { width: cellSize }]}>{wd}</Text>
         ))}
       </View>
-      <View style={[s.daysGrid, { paddingHorizontal: isDesktop ? 32 : 8 }]}>
-        {renderCalendar()}
+
+      <View style={[s.grid, { paddingHorizontal: gridPadH }]}>
+        {renderCells()}
       </View>
     </View>
   );
 
+  // ── Main ──────────────────────────────────────────────────────────────────
   return (
     <View style={s.screen}>
       <NavBar />
@@ -374,61 +346,57 @@ export default function Reserva() {
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[s.container, isDesktop && s.containerDesktop]}>
-
+        <View style={[
+          s.container,
+          isDesktop && { maxWidth: MAX_W, alignSelf: 'center' as const, paddingHorizontal: H_PAD },
+        ]}>
           <TouchableOpacity onPress={() => router.back()} style={s.backRow}>
-            <Text style={s.backRowText}>{'<- Volver'}</Text>
+            <Text style={s.backText}>{'<- Volver'}</Text>
           </TouchableOpacity>
-
-          <Text style={[s.pageTitle, { fontSize: isDesktop ? 28 : 20 }]}>
-            {'RESERVA DE CITAS'}
-          </Text>
-          <Text style={s.pageSubtitle}>
-            {'Selecciona un dia disponible para ver los horarios'}
-          </Text>
+          <Text style={[s.pageTitle, { fontSize: isDesktop ? 28 : 22 }]}>RESERVA DE CITAS</Text>
+          <Text style={s.pageSub}>Selecciona un día disponible para ver los horarios</Text>
 
           {isDesktop ? (
-            <View style={s.mainLayoutDesktop}>
-              {renderCalCard()}
-              {showOverlay && (
-                <View style={s.slotsPanel}>
-                  {renderSlotsContent()}
-                </View>
-              )}
-              {showPanel && (
-                <View style={s.confirmPanel}>
-                  {renderConfirmContent()}
-                </View>
-              )}
+            // ── DESKTOP: 3 fixed columns, panels opacity:0 when hidden ────────
+            <View style={s.row}>
+              {renderCal()}
+              <View style={[s.sidePanel, { width: SLOTS_W }, !showSlots && s.invisible]}>
+                {showSlots && renderSlots(true)}
+              </View>
+              <View style={[s.sidePanel, { width: CONFIRM_W }, !showConfirm && s.invisible]}>
+                {showConfirm && renderConfirm(true)}
+              </View>
             </View>
-          ) : (
-            <>
-              {renderCalCard()}
 
-              {/* Móvil: slots debajo del calendario */}
-              {showOverlay && !showPanel && (
-                <View style={s.mobilePanelCard}>
-                  {renderSlotsContent()}
+          ) : (
+            // ── MOBILE ────────────────────────────────────────────────────────
+            <>
+              {/* Calendar always visible */}
+              {renderCal()}
+
+              {/* Step 1: day selected → show slots in a 2-column grid */}
+              {showSlots && !showConfirm && (
+                <View style={s.mobilePanel}>
+                  {renderSlots(false)}
                 </View>
               )}
 
-              {/* Móvil: confirmación */}
-              {showPanel && (
-                <View style={s.mobilePanelCard}>
+              {/* Step 2: slot selected → show confirm below */}
+              {showConfirm && (
+                <View style={s.mobilePanel}>
+                  {/* Back to slots */}
                   <TouchableOpacity
-                    onPress={() => setShowPanel(false)}
-                    style={{ marginBottom: 12 }}
+                    onPress={() => setShowConfirm(false)}
+                    style={s.mobileBack}
                   >
-                    <Text style={{ color: BURGUNDY, fontSize: 13, fontWeight: '600' }}>
-                      {'← Horarios'}
-                    </Text>
+                    <MaterialIcons name="chevron-left" size={18} color={BURGUNDY} />
+                    <Text style={s.mobileBackText}>Horarios</Text>
                   </TouchableOpacity>
-                  {renderConfirmContent()}
+                  {renderConfirm(false)}
                 </View>
               )}
             </>
           )}
-
         </View>
         <Footer />
       </ScrollView>
@@ -437,181 +405,152 @@ export default function Reserva() {
 }
 
 const s = StyleSheet.create({
-  screen:           { flex: 1, backgroundColor: CREAM },
-  scroll:           { flex: 1 },
-  scrollContent:    { flexGrow: 1, paddingBottom: 60 },
-  container:        { paddingHorizontal: 16, paddingTop: 20 },
-  containerDesktop: { maxWidth: 900, alignSelf: 'center', paddingHorizontal: 60 },
+  screen:        { flex: 1, backgroundColor: CREAM },
+  scroll:        { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'space-between', paddingBottom: 32 },
+  container:     { paddingHorizontal: 14, paddingTop: 16 },
 
-  backRow:      { paddingVertical: 12 },
-  backRowText:  { color: BURGUNDY, fontSize: 14, fontWeight: '600' },
-  pageTitle:    { fontWeight: '700', color: '#2C2A22', marginBottom: 4, letterSpacing: 0.5 },
-  pageSubtitle: { fontSize: 12, color: MUTED, marginBottom: 20 },
+  backRow:   { paddingVertical: 10 },
+  backText:  { color: BURGUNDY, fontSize: 14, fontWeight: '600' },
+  pageTitle: { fontWeight: '700', color: '#2C2A22', marginBottom: 4, letterSpacing: 0.5 },
+  pageSub:   { fontSize: 12, color: MUTED, marginBottom: 16 },
 
-  mainLayoutDesktop: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  // ── Desktop row ───────────────────────────────────────────────────────────
+  row:       { flexDirection: 'row', alignItems: 'flex-start', gap: GAP },
+  invisible: { opacity: 0, pointerEvents: 'none' as const },
 
+  // ── Calendar ─────────────────────────────────────────────────────────────
   calCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-    marginBottom: 12,
+    backgroundColor: '#FFF',
+    borderRadius:    14,
+    borderWidth:     1,
+    borderColor:     BORDER,
+    overflow:        'hidden',
+    marginBottom:    14,
   },
-  calCardDesktop: { flex: 1, marginBottom: 48 },
-
   calHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical:   14,
     borderBottomWidth: 0.5,
     borderBottomColor: BORDER,
-    backgroundColor: CREAM,
+    backgroundColor:   CREAM,
   },
-  navBtn:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 6, borderWidth: 0.5, borderColor: BORDER },
-  navBtnText: { color: BURGUNDY, fontSize: 22 },
-  monthLabel: { color: '#2C2A22', letterSpacing: 0.5 },
+  navBtn:     { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 0.5, borderColor: BORDER },
+  navBtnText: { color: BURGUNDY, fontSize: 22, lineHeight: 26 },
+  monthLabel: { color: '#2C2A22', fontWeight: '700', letterSpacing: 0.4 },
 
-  weekdaysRow: {
-    flexDirection: 'row',
-    paddingTop: 12,
-    paddingBottom: 6,
-  },
-  weekdayText: {
+  weekRow: { flexDirection: 'row', paddingTop: 10, paddingBottom: 4, gap: 2 },
+  weekLabel: {
     textAlign: 'center',
+    fontSize: 10,
     color: MUTED,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
 
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingBottom: 16,
-    gap: 2,
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingBottom: 14, gap: 2 },
+
+  cell:            { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  cellToday:       { borderWidth: 1, borderColor: BURGUNDY },
+  cellSelected:    { backgroundColor: BURGUNDY },
+  cellDisabled:    { opacity: 0.25 },
+  cellFull:        { backgroundColor: '#EDE8DE' },
+  cellText:        { color: '#4A4035' },
+  cellTextToday:   { color: BURGUNDY, fontWeight: '700' },
+  cellTextSel:     { color: '#FFF', fontWeight: '700' },
+  cellTextDisabled:{ color: MUTED },
+
+  dot:       { width: 4, height: 4, borderRadius: 2, backgroundColor: BURGUNDY, position: 'absolute', bottom: 5 },
+  dotSel:    { backgroundColor: '#FFF' },
+  fullLabel: { fontSize: 7, color: MUTED, marginTop: 1 },
+
+  // ── Desktop side panels ───────────────────────────────────────────────────
+  sidePanel: {
+    backgroundColor: '#FFF',
+    borderRadius:    14,
+    borderWidth:     1,
+    borderColor:     BORDER,
+    padding:         16,
+    maxHeight:       620,
   },
 
-  dayCell:         { alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
-  dayCellToday:    { borderWidth: 0.5, borderColor: BURGUNDY },
-  dayCellSelected: { backgroundColor: BURGUNDY },
-  dayCellDisabled: { opacity: 0.3 },
-  dayCellFull:     { backgroundColor: '#F0EBE1' },
-
-  dayText:         { color: '#4A4035' },
-  dayTextToday:    { color: BURGUNDY, fontWeight: '600' },
-  dayTextSelected: { color: '#FFFFFF' },
-  dayTextDisabled: { color: MUTED },
-
-  fullText: { fontSize: 8, color: MUTED, marginTop: 1 },
-
-  dot:         { width: 3, height: 3, borderRadius: 2, backgroundColor: BURGUNDY, position: 'absolute', bottom: 5 },
-  dotSelected: { backgroundColor: '#FFFFFF' },
-
-  // ── Panel móvil ──
-  mobilePanelCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    marginBottom: 24,
+  // ── Mobile panels ─────────────────────────────────────────────────────────
+  // A single card below the calendar, full width, no maxHeight (scrolls naturally)
+  mobilePanel: {
+    backgroundColor: '#FFF',
+    borderRadius:    14,
+    borderWidth:     1,
+    borderColor:     BORDER,
+    padding:         16,
+    marginBottom:    16,
   },
 
-  // ── Slots panel (desktop) ──
-  slotsPanel: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    width: 190,
-    maxHeight: 560,
+  mobileBack: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    marginBottom:   12,
+    gap:            2,
   },
-  slotsPanelHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  slotsPanelDate: { fontSize: 13, fontWeight: '600', color: '#2C2A22' },
-  closePanelBtn:  { fontSize: 14, color: MUTED, padding: 4 },
-  slotsLabel:     { fontSize: 10, color: MUTED, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  mobileBackText: { color: BURGUNDY, fontSize: 13, fontWeight: '600' },
 
+  // ── Shared panel internals ────────────────────────────────────────────────
+  panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  panelDate:   { fontSize: 14, fontWeight: '700', color: '#2C2A22' },
+  panelLabel:  { fontSize: 9, color: MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
+
+  // Slots — on mobile rendered in a 2-column grid
   slotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     justifyContent: 'space-between',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    marginBottom: 5,
+    paddingVertical:   10,
+    paddingHorizontal: 12,
+    borderRadius:   8,
+    borderWidth:    0.5,
+    borderColor:    BORDER,
+    marginBottom:   8,
     backgroundColor: '#FAFAF7',
   },
-  slotRowBooked:    { backgroundColor: '#F0EBE1', borderColor: '#E0D8C8' },
-  slotRowSelected:  { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
-  slotText:         { fontSize: 12, color: '#4A4035' },
-  slotTextBooked:   { color: '#C4B89A', textDecorationLine: 'line-through' },
-  slotTextSelected: { color: '#FFFFFF' },
-  slotOcupado:      { fontSize: 9, color: '#C4B89A', fontStyle: 'italic' },
-  slotSelIcon:      { fontSize: 11, color: '#FFFFFF' },
+  slotBooked:    { backgroundColor: '#F0EBE1', borderColor: '#E0D8C8' },
+  slotSel:       { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
+  slotText:      { fontSize: 14, color: '#4A4035', fontWeight: '500' },
+  slotTextBooked:{ color: '#C4B89A', textDecorationLine: 'line-through' },
+  slotTextSel:   { color: '#FFF', fontWeight: '600' },
+  slotUnavail:   { fontSize: 10, color: '#C4B89A', fontStyle: 'italic' },
 
-  // ── Confirm panel (desktop) ──
-  confirmPanel: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    width: 240,
-  },
-  confirmPanelTitle: { fontSize: 14, fontWeight: '700', color: '#2C2A22', marginBottom: 4 },
-  confirmPanelDate:  { fontSize: 11, color: MUTED, marginBottom: 14 },
-  confirmLabel:      { fontSize: 10, color: MUTED, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  // Confirm
+  confirmTitle: { fontSize: 16, fontWeight: '700', color: '#2C2A22', marginBottom: 4 },
+  confirmSub:   { fontSize: 12, color: MUTED, marginBottom: 14 },
 
-  servicioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    marginBottom: 5,
+  servRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    paddingVertical:   10,
+    paddingHorizontal: 12,
+    borderRadius:   8,
+    borderWidth:    0.5,
+    borderColor:    BORDER,
+    marginBottom:   8,
     backgroundColor: '#FAFAF7',
   },
-  servicioRowSelected:  { borderColor: BURGUNDY, backgroundColor: '#FBF5F6' },
-  servicioName:         { fontSize: 12, color: '#2C2A22', fontWeight: '500' },
-  servicioNameSelected: { color: BURGUNDY, fontWeight: '700' },
-  servicioDuration:     { fontSize: 10, color: MUTED },
-  servicioCheck:        { fontSize: 13, color: BURGUNDY, fontWeight: '700' },
+  servRowSel: { borderColor: BURGUNDY, backgroundColor: '#FBF5F6' },
+  servName:   { fontSize: 13, color: '#2C2A22', fontWeight: '500' },
+  servNameSel:{ color: BURGUNDY, fontWeight: '700' },
+  servDur:    { fontSize: 11, color: MUTED, marginTop: 1 },
 
-  aclaracionInput: {
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 12,
-    color: '#2C2A22',
-    backgroundColor: '#FAFAF7',
-    minHeight: 60,
-    textAlignVertical: 'top',
-    marginBottom: 14,
-  },
+  loginNote:     { fontSize: 12, color: MUTED, textAlign: 'center', marginVertical: 10 },
+  errorText:     { fontSize: 13, color: BURGUNDY, marginBottom: 8, textAlign: 'center' },
+  confirmBtn:    { backgroundColor: BURGUNDY, paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  confirmBtnOff: { backgroundColor: BORDER },
+  confirmBtnText:{ color: '#FFF', fontSize: 13, fontWeight: '700', letterSpacing: 0.8 },
 
-  errorText:          { fontSize: 12, color: BURGUNDY, marginBottom: 8, textAlign: 'center' },
-  confirmBtn:         { backgroundColor: BURGUNDY, paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
-  confirmBtnDisabled: { backgroundColor: BORDER },
-  confirmBtnText:     { color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
-
-  successBox:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
-  successCheck:   { fontSize: 40, color: BURGUNDY, marginBottom: 12 },
-  successTitle:   { fontSize: 18, fontWeight: '700', color: BURGUNDY, marginBottom: 6 },
-  successSub:     { fontSize: 14, color: '#4A4035', marginBottom: 4 },
-  successService: { fontSize: 13, color: MUTED, marginBottom: 20 },
-  resetBtn:       { borderWidth: 0.5, borderColor: BORDER, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 6 },
-  resetBtnText:   { fontSize: 13, color: BURGUNDY },
+  successBox:   { alignItems: 'center', paddingVertical: 28, gap: 10 },
+  successTitle: { fontSize: 20, fontWeight: '700', color: BURGUNDY },
+  successSub:   { fontSize: 14, color: '#4A4035' },
+  successServ:  { fontSize: 13, color: MUTED },
+  resetBtn:     { marginTop: 16, borderWidth: 0.5, borderColor: BORDER, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 },
+  resetBtnText: { fontSize: 14, color: BURGUNDY },
 });

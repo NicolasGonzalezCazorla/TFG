@@ -12,6 +12,7 @@ export const detalleStyles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'space-between',
   },
   container: {
     width: '100%',

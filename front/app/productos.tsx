@@ -11,8 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Pagination from '../components/Pagination';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
+import { MaterialIcons } from '@expo/vector-icons';
+import { API_URL } from '../constants';
 
 const BREAKPOINT = 768;
 const BURGUNDY   = '#63202C';
@@ -20,7 +23,6 @@ const CREAM      = '#F5F0E8';
 const BORDER     = '#C4B89A';
 const MUTED      = '#9A8E7A';
 const GOLD       = '#C6A75E';
-import { API_URL } from '../constants';
 
 const CATEGORIAS = ['Todos', 'Facial', 'Corporal', 'Cabello', 'Suplementos'];
 const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/300/300' };
@@ -42,36 +44,31 @@ export default function Productos() {
   const isDesktop = width >= BREAKPOINT;
   const router    = useRouter();
 
-  const [productos,        setProductos]        = useState<Producto[]>([]);
-  const [loading,          setLoading]          = useState(true);
-  const [error,            setError]            = useState('');
-  const [search,           setSearch]           = useState('');
-  const [categoria,        setCategoria]        = useState('Todos');
-  const [orden,            setOrden]            = useState<'asc' | 'desc' | null>(null);
+  const [productos,  setProductos]  = useState<Producto[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [search,     setSearch]     = useState('');
+  const [categoria,  setCategoria]  = useState('Todos');
+  const [orden,      setOrden]      = useState<'asc' | 'desc' | null>(null);
+  const [page,       setPage]       = useState(1);
+  const PAGE_SIZE = 6;
 
-  useEffect(() => {
-    cargarProductos();
-  }, []);
+  useEffect(() => { cargarProductos(); }, []);
+  useEffect(() => { setPage(1); }, [search, categoria, orden]);
 
   const cargarProductos = async () => {
     try {
       setLoading(true);
       const res  = await fetch(`${API_URL}/productos`);
       const data = await res.json();
-      if (res.ok) {
-        setProductos(data.productos ?? []);
-      } else {
-        setError(data.error || 'Error cargando productos');
-      }
-    } catch (e) {
-      setError('Error de conexion');
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) setProductos(data.productos ?? []);
+      else setError(data.error || 'Error cargando productos');
+    } catch { setError('Error de conexión'); }
+    finally { setLoading(false); }
   };
 
   const productosFiltrados = productos
-    .filter((p) => {
+    .filter(p => {
       const matchCat    = categoria === 'Todos' || p.categoria === categoria;
       const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
@@ -82,10 +79,13 @@ export default function Productos() {
       return 0;
     });
 
+  const totalProductos = productosFiltrados.length;
+  const pageItems      = productosFiltrados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const numColumns = isDesktop ? 3 : 2;
   const rows: Producto[][] = [];
-  for (let i = 0; i < productosFiltrados.length; i += numColumns) {
-    rows.push(productosFiltrados.slice(i, i + numColumns));
+  for (let i = 0; i < pageItems.length; i += numColumns) {
+    rows.push(pageItems.slice(i, i + numColumns));
   }
 
   return (
@@ -98,7 +98,6 @@ export default function Productos() {
       >
         <View style={[s.container, isDesktop && s.containerDesktop]}>
 
-          {/* ── Cabecera ── */}
           <View style={s.pageHeader}>
             <Text style={[s.pageTitle, { fontSize: isDesktop ? 28 : 22 }]}>
               {'Nuestros Productos'}
@@ -108,11 +107,9 @@ export default function Productos() {
             </Text>
           </View>
 
-          {/* ── Filtros ── */}
           <View style={[s.filtersCard, isDesktop && s.filtersCardDesktop]}>
-
             <View style={s.searchWrapper}>
-              <Text style={s.searchIcon}>{'🔍'}</Text>
+              <MaterialIcons name="search" size={18} color={MUTED} style={s.searchIcon} />
               <TextInput
                 style={s.searchInput}
                 placeholder={'Buscar producto...'}
@@ -122,7 +119,7 @@ export default function Productos() {
               />
               {search.length > 0 && (
                 <TouchableOpacity onPress={() => setSearch('')}>
-                  <Text style={s.clearBtn}>{'✕'}</Text>
+                  <MaterialIcons name="close" size={18} color={MUTED} style={s.clearBtn} />
                 </TouchableOpacity>
               )}
             </View>
@@ -132,7 +129,7 @@ export default function Productos() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={s.categoriasRow}
             >
-              {CATEGORIAS.map((cat) => (
+              {CATEGORIAS.map(cat => (
                 <TouchableOpacity
                   key={cat}
                   style={[s.catBtn, categoria === cat && s.catBtnActive]}
@@ -164,10 +161,8 @@ export default function Productos() {
                 </Text>
               </TouchableOpacity>
             </View>
-
           </View>
 
-          {/* ── Loading / Error ── */}
           {loading ? (
             <ActivityIndicator color={BURGUNDY} style={{ marginTop: 40 }} />
           ) : error ? (
@@ -190,7 +185,7 @@ export default function Productos() {
               ) : (
                 rows.map((row, rowIdx) => (
                   <View key={rowIdx} style={s.productRow}>
-                    {row.map((product) => (
+                    {row.map(product => (
                       <TouchableOpacity
                         key={product.id}
                         style={s.productCard}
@@ -202,36 +197,33 @@ export default function Productos() {
                               name:        product.nombre,
                               price:       String(product.precio),
                               description: product.descripcion,
+                              imagen_url:  product.imagen_url ?? '',
                             },
                           })
                         }
                         activeOpacity={0.85}
                       >
-                        <Image
-                          source={
-                            product.imagen_url
-                              ? { uri: product.imagen_url }
-                              : PRODUCT_IMAGE
-                          }
-                          style={s.productImage}
-                          resizeMode="contain"
-                        />
+                        {/* Imagen cuadrada con cover */}
+                        <View style={s.imageContainer}>
+                          <Image
+                            source={product.imagen_url ? { uri: product.imagen_url } : PRODUCT_IMAGE}
+                            style={s.productImage}
+                            resizeMode="cover"
+                          />
+                        </View>
+
                         <View style={s.productInfo}>
-                          <View style={s.productNameRow}>
-                            <Text style={s.productName} numberOfLines={1}>
-                              {product.nombre}
-                            </Text>
-                            <Text style={s.productPrice}>{product.precio}{'€'}</Text>
-                          </View>
+                          <Text style={s.productName} numberOfLines={2}>
+                            {product.nombre}
+                          </Text>
+                          <Text style={s.productPrice}>{product.precio}{'€'}</Text>
                           <Text style={s.productCategory}>{product.categoria}</Text>
                           <Text style={s.productDesc} numberOfLines={2}>
                             {product.descripcion}
                           </Text>
                         </View>
-                        <View style={[
-                          s.detalleBtn,
-                          product.estado === 'sin_stock' && s.detalleBtnSinStock,
-                        ]}>
+
+                        <View style={[s.detalleBtn, product.estado === 'sin_stock' && s.detalleBtnSinStock]}>
                           <Text style={s.detalleBtnText}>
                             {product.estado === 'sin_stock' ? 'SIN STOCK' : 'DETALLE'}
                           </Text>
@@ -239,14 +231,19 @@ export default function Productos() {
                       </TouchableOpacity>
                     ))}
                     {row.length < numColumns &&
-                      Array(numColumns - row.length)
-                        .fill(null)
-                        .map((_, i) => (
-                          <View key={`empty-${i}`} style={[s.productCard, { opacity: 0 }]} />
-                        ))}
+                      Array(numColumns - row.length).fill(null).map((_, i) => (
+                        <View key={`empty-${i}`} style={[s.productCard, { opacity: 0 }]} />
+                      ))}
                   </View>
                 ))
               )}
+
+              <Pagination
+                totalItems={totalProductos}
+                pageSize={PAGE_SIZE}
+                currentPage={page}
+                onPageChange={(value) => setPage(value)}
+              />
             </>
           )}
 
@@ -260,7 +257,7 @@ export default function Productos() {
 const s = StyleSheet.create({
   screen:           { flex: 1, backgroundColor: CREAM },
   scroll:           { flex: 1 },
-  scrollContent:    { flexGrow: 1, paddingBottom: 40 },
+  scrollContent:    { flexGrow: 1, justifyContent: 'space-between', paddingBottom: 40 },
   container:        { paddingHorizontal: 16, paddingTop: 20 },
   containerDesktop: { maxWidth: 1100, alignSelf: 'center', paddingHorizontal: 40 },
 
@@ -296,33 +293,19 @@ const s = StyleSheet.create({
     flex: 1,
     minWidth: 200,
   },
-  searchIcon:  { fontSize: 14, marginRight: 6 },
+  searchIcon:  { marginRight: 6 },
   searchInput: { flex: 1, fontSize: 13, color: '#2C2A22' },
-  clearBtn:    { fontSize: 14, color: MUTED, paddingLeft: 6 },
+  clearBtn:    { paddingLeft: 6 },
 
-  categoriasRow: { gap: 8, paddingVertical: 2 },
-  catBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    backgroundColor: '#FAFAF7',
-  },
-  catBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
-  catBtnText:       { fontSize: 12, color: '#555555' },
-  catBtnTextActive: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
+  categoriasRow:      { gap: 8, paddingVertical: 2 },
+  catBtn:             { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7' },
+  catBtnActive:       { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
+  catBtnText:         { fontSize: 12, color: '#555555' },
+  catBtnTextActive:   { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
 
   ordenRow:           { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ordenLabel:         { fontSize: 12, color: MUTED },
-  ordenBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    backgroundColor: '#FAFAF7',
-  },
+  ordenBtn:           { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#FAFAF7' },
   ordenBtnActive:     { backgroundColor: BURGUNDY, borderColor: BURGUNDY },
   ordenBtnText:       { fontSize: 12, color: '#555555' },
   ordenBtnTextActive: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
@@ -334,48 +317,28 @@ const s = StyleSheet.create({
   retryBtn:     { borderWidth: 0.5, borderColor: BORDER, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 6 },
   retryBtnText: { fontSize: 13, color: BURGUNDY },
 
-  productRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  productCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
+  productRow:  { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  productCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
+
+  imageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#F9F8F4',
   },
   productImage: {
     width: '100%',
-    height: 140,
-    backgroundColor: '#F9F8F4',
+    height: '100%',
   },
-  productInfo: { padding: 10 },
-  productNameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  productName:     { fontSize: 13, fontWeight: '700', color: '#333333', flex: 1, marginRight: 6 },
-  productPrice:    { fontSize: 13, fontWeight: '700', color: BURGUNDY },
-  productCategory: { fontSize: 11, color: GOLD, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  productDesc:     { fontSize: 11, color: '#888888', lineHeight: 16 },
 
-  detalleBtn: {
-    backgroundColor: BURGUNDY,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
+  productInfo:     { padding: 10, gap: 3 },
+  productName:     { fontSize: 12, fontWeight: '700', color: '#2C2A22', lineHeight: 17 },
+  productPrice:    { fontSize: 14, fontWeight: '700', color: BURGUNDY },
+  productCategory: { fontSize: 10, color: GOLD, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  productDesc:     { fontSize: 11, color: '#888888', lineHeight: 15 },
+
+  detalleBtn:         { backgroundColor: BURGUNDY, paddingVertical: 9, alignItems: 'center' },
   detalleBtnSinStock: { backgroundColor: MUTED },
-  detalleBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
+  detalleBtnText:     { color: '#FFFFFF', fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
 
   emptyState: { paddingVertical: 60, alignItems: 'center' },
   emptyText:  { fontSize: 14, color: MUTED },

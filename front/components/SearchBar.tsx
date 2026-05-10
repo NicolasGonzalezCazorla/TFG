@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 interface SearchBarProps {
   value: string;
@@ -10,7 +11,7 @@ interface SearchBarProps {
 const SearchBar = ({ value, onChangeText, placeholder = 'Search' }: SearchBarProps) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>🔍</Text>
+      <MaterialIcons name="search" size={18} color="#AAAAAA" style={styles.icon} />
       <TextInput
         style={styles.input}
         placeholder={placeholder}

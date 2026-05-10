@@ -1,4 +1,5 @@
 import { Text, View, TouchableOpacity, Linking } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { footerStyles } from './footer.styles';
 
 export default function Footer() {
@@ -41,7 +42,10 @@ export default function Footer() {
             onPress={handlePressMap}
             activeOpacity={0.7}
           >
-             <Text style={footerStyles.mapText}>📍 VER MAPA</Text>
+            <View style={footerStyles.mapButton}>
+              <MaterialIcons name="place" size={16} color="#5a1e2a" />
+              <Text style={footerStyles.mapText}>VER MAPA</Text>
+            </View>
           </TouchableOpacity>
         </View>
 

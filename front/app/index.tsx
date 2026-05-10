@@ -15,6 +15,7 @@ import Button from '../components/Button';
 import Badge from '../components/Badge';
 import SearchBar from '../components/SearchBar';
 import SectionHeader from '../components/SectionHeader';
+import Pagination from '../components/Pagination';
 import NavBar from '../components/NavBar';
 import Footer from '../components/footer';
 
@@ -25,6 +26,7 @@ type Product = {
   name: string;
   price: string;
   description: string;
+  imagen_url: string;
 };
 
 type Experience = {
@@ -33,41 +35,40 @@ type Experience = {
   description: string;
   image: { uri: string };
 };
-
 const EXPERIENCES: Experience[] = [
   {
     id: '1',
     title: 'Facial Glow',
-    description: 'Luz, hidratación y tontura activa',
-    image: { uri: 'https://picsum.photos/seed/facial1/400/300' },
+    description: 'Luz, hidratación y textura activa',
+    image: { uri: 'https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?q=80&w=800&auto=format&fit=crop' },
   },
   {
     id: '2',
     title: 'Masaje Relajante',
     description: 'Descanso profundo con nuestros productos',
-    image: { uri: 'https://picsum.photos/seed/massage2/400/300' },
+    image: { uri: 'https://plus.unsplash.com/premium_photo-1661505103296-a23f027f2dd1?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' },
   },
   {
     id: '3',
     title: 'Ritual Imperial',
     description: 'Equilibrio y vitalidad integral',
-    image: { uri: 'https://picsum.photos/seed/ritual3/400/300' },
+    image: { uri: 'https://plus.unsplash.com/premium_photo-1661281275452-744317772b99?q=80&w=1169&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' },
   },
 ];
 
 const CATEGORIES = ['CAT 1', 'CAT 2', 'CAT 3', 'CAT 4'];
 
 const PRODUCTS_FALLBACK: Product[] = [
-  { id: '1', name: 'Producto 1', price: '25', description: 'Descripcion del producto breve.' },
-  { id: '2', name: 'Producto 2', price: '34', description: 'Descripcion del producto breve.' },
-  { id: '3', name: 'Producto 3', price: '27', description: 'Descripcion del producto breve.' },
-  { id: '4', name: 'Producto 4', price: '29', description: 'Descripcion del producto breve.' },
-  { id: '5', name: 'Producto 5', price: '40', description: 'Descripcion del producto breve.' },
-  { id: '6', name: 'Producto 6', price: '22', description: 'Descripcion del producto breve.' },
+  { id: '1', name: 'Producto 1', price: '25', description: 'Descripcion del producto breve.', imagen_url: '' },
+  { id: '2', name: 'Producto 2', price: '34', description: 'Descripcion del producto breve.', imagen_url: '' },
+  { id: '3', name: 'Producto 3', price: '27', description: 'Descripcion del producto breve.', imagen_url: '' },
+  { id: '4', name: 'Producto 4', price: '29', description: 'Descripcion del producto breve.', imagen_url: '' },
+  { id: '5', name: 'Producto 5', price: '40', description: 'Descripcion del producto breve.', imagen_url: '' },
+  { id: '6', name: 'Producto 6', price: '22', description: 'Descripcion del producto breve.', imagen_url: '' },
 ];
 
 const PRODUCT_IMAGE = { uri: 'https://picsum.photos/seed/lipstick/300/300' };
-const SALON_IMAGE   = { uri: 'https://picsum.photos/seed/salon/700/500' };
+const SALON_IMAGE   = { uri: 'https://images.unsplash.com/photo-1652706299340-e8a346491541?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' };
 const BREAKPOINT    = 768;
 
 export default function Home() {
@@ -77,21 +78,23 @@ export default function Home() {
 
   const [searchQuery,    setSearchQuery]    = useState('');
   const [activeCategory, setActiveCategory] = useState('CAT 1');
+  const [page,           setPage]           = useState(1);
   const [productos,      setProductos]      = useState<Product[]>([]);
+  const PAGE_SIZE = 6;
 
   useEffect(() => {
     fetch(`${API_URL}/productos`)
       .then(res => res.json())
       .then(data => {
         if (data.productos && data.productos.length > 0) {
-          // Muestra solo los primeros 6 en el home
-          const primeros6 = data.productos.slice(0, 6).map((p: any) => ({
+          const allProducts = data.productos.map((p: any) => ({
             id:          p.id,
             name:        p.nombre,
             price:       String(p.precio),
             description: p.descripcion,
+            imagen_url:  p.imagen_url ?? '',
           }));
-          setProductos(primeros6);
+          setProductos(allProducts);
         } else {
           setProductos(PRODUCTS_FALLBACK);
         }
@@ -197,10 +200,16 @@ export default function Home() {
   );
 
   const renderProducts = () => {
+    const productosFiltrados = productos.filter((product) =>
+      product.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    const totalProducts = productosFiltrados.length;
+    const pageItems     = productosFiltrados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
     const numColumns = isDesktop ? 3 : 2;
     const rows: Product[][] = [];
-    for (let i = 0; i < productos.length; i += numColumns) {
-      rows.push(productos.slice(i, i + numColumns));
+    for (let i = 0; i < pageItems.length; i += numColumns) {
+      rows.push(pageItems.slice(i, i + numColumns));
     }
 
     return (
@@ -244,7 +253,11 @@ export default function Home() {
               {row.map((product) => (
                 <ProductCard
                   key={product.id}
-                  image={PRODUCT_IMAGE}
+                  image={
+                    product.imagen_url
+                      ? { uri: product.imagen_url }
+                      : PRODUCT_IMAGE
+                  }
                   name={product.name}
                   price={product.price}
                   description={product.description}
@@ -256,6 +269,7 @@ export default function Home() {
                         name:        product.name,
                         price:       product.price,
                         description: product.description,
+                        imagen_url:  product.imagen_url ?? '',
                       },
                     })
                   }
@@ -270,6 +284,12 @@ export default function Home() {
             </View>
           ))}
         </View>
+        <Pagination
+          totalItems={totalProducts}
+          pageSize={PAGE_SIZE}
+          currentPage={page}
+          onPageChange={(value) => setPage(value)}
+        />
       </View>
     );
   };

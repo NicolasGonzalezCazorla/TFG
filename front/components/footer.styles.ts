@@ -3,9 +3,9 @@ import { StyleSheet } from 'react-native';
 export const footerStyles = StyleSheet.create({
   footerContainer: {
     backgroundColor: '#ffffff',
-    paddingTop: 40,
-    paddingBottom: 30,
-    paddingHorizontal: 25,
+    paddingTop: 18,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: '#f5f1e8',
   },
@@ -56,9 +56,14 @@ export const footerStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#c6a75e', 
   },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   mapText: {
     color: '#5a1e2a',
     fontSize: 10,
     fontWeight: '700',
+    marginLeft: 6,
   },
 });
